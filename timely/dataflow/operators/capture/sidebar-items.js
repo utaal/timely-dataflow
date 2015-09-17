@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["Event","Possible events that the captured stream may provide."]],"struct":[["EventLink","Linked list of events."],["Handle","A handle to the captured data, shared with the capture operator itself."]],"trait":[["Capture","Capture a stream of timestamped data for later replay."]]});
