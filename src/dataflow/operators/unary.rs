@@ -14,6 +14,10 @@ use dataflow::channels::pushers::Counter as PushCounter;
 use dataflow::channels::pushers::buffer::Buffer as PushBuffer;
 use dataflow::channels::pact::ParallelizationContract;
 use dataflow::channels::pullers::Counter as PullCounter;
+use dataflow::channels::Content;
+
+use timely_communication::Push;
+use dataflow::operators::capabilities::{CapabilityPull, CapabilityPush};
 
 use ::Data;
 
@@ -21,6 +25,9 @@ use dataflow::{Stream, Scope};
 
 // type Input<T, D> = PullCounter<T, D>;
 // type Output<T, D> = PushBuffer<T, D, PushCounter<T, D, Tee<T, D>>>;
+
+type Input<'a, T: Timestamp, D: Data> = CapabilityPull<'a, T, D>;
+type Output<'a, T: Timestamp, D: Data, P: Push<(T, Content<D>)>> = CapabilityPush<'a, T, D, P>;
 
 /// Methods to construct generic streaming and blocking unary operators.
 pub trait Unary<G: Scope, D1: Data> {
@@ -46,7 +53,7 @@ pub trait Unary<G: Scope, D1: Data> {
     where
         D2: Data,
         L: FnMut(&mut PullCounter<G::Timestamp, D1>,
-                 &mut PushBuffer<G::Timestamp, D2,PushCounter<G::Timestamp, D2, Tee<G::Timestamp, D2>>>)+'static,
+                 &mut PushBuffer<G::Timestamp, D2, PushCounter<G::Timestamp, D2, Tee<G::Timestamp, D2>>>)+'static,
         P: ParallelizationContract<G::Timestamp, D1>;
     /// Creates a new dataflow operator that partitions its input stream by a parallelization
     /// strategy `pact`, and repeatedly invokes `logic` which can read from the input stream,
