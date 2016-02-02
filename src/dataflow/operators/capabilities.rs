@@ -186,3 +186,11 @@ impl<T: Timestamp> Iterator for CapabilityNotificator<T> {
         else { None }
     }
 }
+
+pub fn unsafe_mint_capability<T: Timestamp>(time: T, internal: Rc<RefCell<CountMap<T>>>) -> Capability<T> {
+    Capability {
+        time: time,
+        internal: internal,
+    }
+}
+
