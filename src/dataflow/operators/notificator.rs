@@ -1,4 +1,3 @@
-use std::collections::VecDeque;
 use progress::frontier::MutableAntichain;
 use progress::Timestamp;
 use progress::count_map::CountMap;
@@ -15,7 +14,6 @@ use dataflow::operators::Capability;
 pub struct Notificator<T: Timestamp> {
     pending: Vec<Capability<T>>,
     frontier: Vec<MutableAntichain<T>>,
-    available: VecDeque<(Capability<T>, i64)>,
 }
 
 impl<T: Timestamp> Notificator<T> {
@@ -23,7 +21,6 @@ impl<T: Timestamp> Notificator<T> {
         Notificator {
             pending: Vec::new(),
             frontier: Vec::new(),
-            available: VecDeque::new(),
         }
     }
 
@@ -88,33 +85,6 @@ impl<T: Timestamp> Notificator<T> {
             ::logging::log(&::logging::GUARDED_PROGRESS, false);
         }
     }
-
-    #[inline]
-    fn scan_for_available_notifications(&mut self) {
-        let mut last = 0;
-        while let Some(position) = (&self.pending[last..]).iter().position(|cap| {
-            let time = cap.time();
-            !self.frontier.iter().any(|x| x.le(&time))
-        }) {
-            let newly_available = self.pending.swap_remove(position + last);
-            let push_new = {
-                let already_available = self.available.iter_mut().find(|&&mut (ref cap, _)| {
-                    cap.time() == newly_available.time()
-                });
-                match already_available {
-                    Some(&mut (_, ref mut count)) => {
-                        *count += 1;
-                        false
-                    },
-                    None => true,
-                }
-            };
-            if push_new {
-                self.available.push_back((newly_available, 1));
-            }
-            last = position;
-        }
-    }
 }
 
 impl<T: Timestamp> Iterator for Notificator<T> {
@@ -126,11 +96,25 @@ impl<T: Timestamp> Iterator for Notificator<T> {
     /// `cap` is a a capability for `t`, the timestamp being notified and, `count` represents
     /// how many capabilities were requested for that specific timestamp.
     fn next(&mut self) -> Option<(Capability<T>, i64)> {
-        if self.available.len() == 0 {
-            self.scan_for_available_notifications();
-        }
-
-        self.available.pop_front()
+        let found = self.pending.iter().enumerate().filter(|&(_pos, ref cap)| {
+            let time = cap.time();
+            !self.frontier.iter().any(|x| x.le(&time))
+        }).fold(None /* (pos, time, count) */, |acc, (cur_pos, ref cur_cap)| {
+            let cur_time = cur_cap.time();
+            match acc {
+                Some((acc_pos, acc_time, acc_count)) => {
+                    if cur_time.lt(&acc_time) {
+                        Some((cur_pos, cur_time, 1))
+                    } else if cur_time.eq(&acc_time) {
+                        Some((acc_pos, acc_time, acc_count + 1))
+                    } else {
+                        acc
+                    }
+                },
+                None => Some((cur_pos, cur_time, 1)),
+            }
+        });
+        found.map(|(pos, _, count)| (self.pending.swap_remove(pos), count))
     }
 }
 
