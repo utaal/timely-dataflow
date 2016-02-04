@@ -13,15 +13,17 @@ use dataflow::operators::Capability;
 /// notification requests less than them. Each with be less-or-equal to itself, so we want to
 /// dodge that corner case.
 pub struct Notificator<T: Timestamp> {
-    pending: Vec<Capability<T>>,
+    pending: MutableAntichain<T>,
+    capabilities: LazyKeyedSet<T, Capability<T>>,
     frontier: Vec<MutableAntichain<T>>,
-    available: VecDeque<(Capability<T>, i64)>,
+    available: VecDeque<T>,
 }
 
 impl<T: Timestamp> Notificator<T> {
     pub fn new() -> Notificator<T> {
         Notificator {
-            pending: Vec::new(),
+            pending: Default::default(),
+            capabilities: LazyKeyedSet::new(),
             frontier: Vec::new(),
             available: VecDeque::new(),
         }
@@ -73,7 +75,8 @@ impl<T: Timestamp> Notificator<T> {
     /// ```
     #[inline]
     pub fn notify_at(&mut self, cap: Capability<T>) {
-        self.pending.push(cap);
+        self.pending.update(&cap.time(), 1);
+        self.capabilities.add_item(cap.time(), cap);
     }
 
     /// Repeatedly calls `logic` till exhaustion of the available notifications.
@@ -89,32 +92,6 @@ impl<T: Timestamp> Notificator<T> {
         }
     }
 
-    #[inline]
-    fn scan_for_available_notifications(&mut self) {
-        let mut last = 0;
-        while let Some(position) = (&self.pending[last..]).iter().position(|cap| {
-            let time = cap.time();
-            !self.frontier.iter().any(|x| x.le(&time))
-        }) {
-            let newly_available = self.pending.swap_remove(position + last);
-            let push_new = {
-                let already_available = self.available.iter_mut().find(|&&mut (ref cap, _)| {
-                    cap.time() == newly_available.time()
-                });
-                match already_available {
-                    Some(&mut (_, ref mut count)) => {
-                        *count += 1;
-                        false
-                    },
-                    None => true,
-                }
-            };
-            if push_new {
-                self.available.push_back((newly_available, 1));
-            }
-            last = position;
-        }
-    }
 }
 
 impl<T: Timestamp> Iterator for Notificator<T> {
@@ -123,14 +100,78 @@ impl<T: Timestamp> Iterator for Notificator<T> {
     /// Retrieve the next available notification.
     ///
     /// Returns `None` if no notification is available. Returns `Some(cap, count)` otherwise:
-    /// `cap` is a a capability for `t`, the timestamp being notified and, `count` represents
+    /// `cap` isa a capability for `t`, the timestamp being notified and, `count` represents
     /// how many capabilities were requested for that specific timestamp.
     fn next(&mut self) -> Option<(Capability<T>, i64)> {
         if self.available.len() == 0 {
-            self.scan_for_available_notifications();
+            for pend in self.pending.elements().iter() {
+                if !self.frontier.iter().any(|x| x.le(pend) ) {
+                    self.available.push_back(pend.clone());
+                }
+            }
         }
 
-        self.available.pop_front()
+        self.available.pop_front().map(|time| {
+            let found = self.pending.count(&time)
+                .and_then(|delta| self.capabilities.remove_item(&time).map(|c| (c, delta)));
+            match found {
+                Some((c, delta)) => {
+                    self.pending.update(&time, -delta);
+                    (c, delta)
+                },
+                None => panic!("failed to find available time in pending")
+            }
+        })
     }
+}
+
+/// A map-set hybrid which maintains all the (key, value) pairs provided until a certain key `k`
+/// is retrieved via `remove_item(&k)`: this results in all `(k, _)` pairs being removed and only
+/// one of them being returned by `remove_item`.
+///
+/// Useful as a stash for notificator's capabilities.
+struct LazyKeyedSet<K: Eq, V> {
+    vec: Vec<(K, V)>,
+}
+
+impl<K: Eq, V> LazyKeyedSet<K, V> {
+    fn new() -> LazyKeyedSet<K, V> {
+        LazyKeyedSet {
+            vec: Vec::new(),
+        }
+    }
+
+    fn add_item(&mut self, key: K, value: V) {
+        self.vec.push((key, value));
+    }
+
+    fn remove_item(&mut self, key: &K) -> Option<V> {
+        let mut last = 0;
+        let mut found = None;
+        while let Some(position) = (&self.vec[last..]).iter().position(|&(ref k, _)| k == key) {
+            found = Some(self.vec.swap_remove(position + last));
+            last = position;
+        }
+        found.map(|(_, v)| v)
+    }
+}
+
+#[test]
+fn lazy_keyed_set_should_behave_correctly() {
+    let mut set = LazyKeyedSet::new();
+    set.add_item(12, 12);
+    set.add_item(12, 12);
+    set.add_item(13, 13);
+    set.add_item(14, 14);
+    set.add_item(14, 14);
+    assert!(set.vec.len() == 5);
+    assert!(set.remove_item(&12).unwrap() == 12);
+    assert!(set.vec.len() == 3);
+    assert!(set.remove_item(&17).is_none());
+    assert!(set.vec.len() == 3);
+    assert!(set.remove_item(&14).unwrap() == 14);
+    assert!(set.vec.len() == 1);
+    assert!(set.remove_item(&13).unwrap() == 13);
+    assert!(set.vec.len() == 0);
 }
 
