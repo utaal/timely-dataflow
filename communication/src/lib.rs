@@ -66,6 +66,8 @@
 //! result: Ok(1)
 //! ```
 
+#![feature(struct_field_attributes)]
+
 extern crate getopts;
 extern crate byteorder;
 extern crate abomonation;
@@ -76,6 +78,7 @@ pub mod initialize;
 mod drain;
 
 use std::any::Any;
+use std::sync::{Mutex, Condvar};
 use abomonation::{Abomonation, encode, decode};
 
 pub use allocator::Generic as Allocator;
@@ -144,4 +147,35 @@ pub trait Pull<T> {
 
 impl<T, P: ?Sized + Pull<T>> Pull<T> for Box<P> {
     fn pull(&mut self) -> &mut Option<T> { (**self).pull() }
+}
+
+pub struct SleepWake {
+    mutex: Mutex<usize>,
+    condvar: Condvar,
+}
+
+impl SleepWake {
+    pub fn new() -> SleepWake {
+        SleepWake {
+            mutex: Mutex::new(0),
+            condvar: Condvar::new(),
+        }
+    }
+
+    fn notify_all(&self) {
+        {
+            let mut counter = self.mutex.lock().unwrap();
+            *counter += 1;
+            // println!("🔥 {}", *counter);
+        }
+        self.condvar.notify_all();
+    }
+
+    pub fn wait(&self, client_counter: &mut usize) {
+        let mut counter = self.mutex.lock().unwrap();
+        if *counter == *client_counter {
+            counter = self.condvar.wait(counter).unwrap();
+        }
+        *client_counter = *counter;
+    }
 }

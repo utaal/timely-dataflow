@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::any::Any;
 
 use progress::timestamp::RootTimestamp;
-use progress::{Timestamp, Operate, Subgraph};
+use progress::{Timestamp, Operate, Activity, Subgraph};
 use timely_communication::{Allocate, Data};
 use {Push, Pull};
 
@@ -42,22 +42,24 @@ impl<A: Allocate> Root<A> {
     ///
     /// A step gives each dataflow operator a chance to run, and is the 
     /// main way to ensure that a computation procedes.
-    pub fn step(&mut self) -> bool {
+    pub fn step(&mut self) -> (bool, Activity) {
 
         if cfg!(feature = "logging") {
             ::logging::flush_logs();
         }
 
         let mut active = false;
+        let mut activity = Activity::Done;
         for dataflow in self.dataflows.borrow_mut().iter_mut() {
-            let sub_active = dataflow.step();
+            let (sub_active, sub_activity) = dataflow.step();
             active = active || sub_active;
+            activity = activity.or(sub_activity);
         }
 
         // discard completed dataflows.
         self.dataflows.borrow_mut().retain(|dataflow| dataflow.active());
 
-        active
+        (active, activity)
     }
     /// Calls `self.step()` as long as `func` evaluates to true.
     pub fn step_while<F: FnMut()->bool>(&mut self, mut func: F) {
@@ -153,8 +155,8 @@ struct Wrapper {
 }
 
 impl Wrapper {
-    fn step(&mut self) -> bool {
-        self.operate.as_mut().map(|op| op.pull_internal_progress(&mut [], &mut [], &mut [])).unwrap_or(false)
+    fn step(&mut self) -> (bool, Activity) {
+        self.operate.as_mut().map(|op| op.pull_internal_progress(&mut [], &mut [], &mut [])).unwrap_or((false, Activity::Done))
     }
     fn active(&self) -> bool { self.operate.is_some() }
 }

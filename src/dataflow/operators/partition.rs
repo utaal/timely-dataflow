@@ -3,7 +3,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use progress::{Timestamp, Operate};
+use progress::{Timestamp, Operate, Activity};
 use progress::nested::{Source, Target};
 use progress::count_map::CountMap;
 
@@ -89,7 +89,7 @@ impl<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2)> Operate<T> for Operato
 
     fn pull_internal_progress(&mut self, consumed: &mut [CountMap<T>],
                                         _internal: &mut [CountMap<T>],
-                                         produced: &mut [CountMap<T>]) -> bool {
+                                         produced: &mut [CountMap<T>]) -> (bool, Activity) {
 
         while let Some((time, data)) = self.input.next() {
             let outputs = self.outputs.iter_mut();
@@ -108,7 +108,7 @@ impl<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2)> Operate<T> for Operato
             output.inner().pull_progress(&mut produced[index]);
         }
 
-        false   // no reason to keep running on Partition's account
+        (false, Activity::Done)   // no reason to keep running on Partition's account
     }
 
     fn notify_me(&self) -> bool { false }

@@ -1,7 +1,19 @@
 //! Starts a timely dataflow execution from configuration information and per-worker logic.
 
+extern crate time;
+
+#[cfg(feature = "sleeping")]
+use std::sync::Arc;
+
 use timely_communication::{initialize, Configuration, Allocator, WorkerGuards};
+
+#[cfg(feature = "sleeping")]
+use timely_communication::SleepWake;
+
 use dataflow::scopes::{Root, Child};
+
+#[cfg(feature = "sleeping")]
+use progress::Activity;
 
 /// Executes a single-threaded timely dataflow computation.
 ///
@@ -49,12 +61,20 @@ use dataflow::scopes::{Root, Child};
 pub fn example<T, F>(func: F) -> T
 where T: Send+'static,
       F: Fn(&mut Child<Root<Allocator>,u64>)->T+Send+Sync+'static {
-    let guards = initialize(Configuration::Thread, move |allocator| {
+    let body = move |allocator| {
         let mut root = Root::new(allocator);
         let result = root.dataflow(|x| func(x));
-        while root.step() { }
+        while {
+            let (active, _) = root.step();
+            active
+        } { }
         result
-    });
+    };
+
+    #[cfg(feature = "sleeping")]
+    panic!("feature sleeping is not supported in examples");
+    #[cfg(not(feature = "sleeping"))]
+    let guards = initialize(Configuration::Thread, body);
 
     guards.unwrap() // assert the computation started correctly
           .join()   // wait for the worker to finish
@@ -62,6 +82,8 @@ where T: Send+'static,
           .unwrap() // assert that the result exists
           .unwrap() // crack open the result to get a T
 }
+
+const SPIN_TIME_NS: u64 = 80_000_000;
 
 /// Executes a timely dataflow from a configuration and per-communicator logic.
 ///
@@ -115,12 +137,68 @@ where T: Send+'static,
 pub fn execute<T, F>(config: Configuration, func: F) -> Result<WorkerGuards<T>,String> 
 where T:Send+'static,
       F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static {
-    initialize(config, move |allocator| {
-        let mut root = Root::new(allocator);
-        let result = func(&mut root);
-        while root.step() { }
-        result
-    })
+
+    #[cfg(feature = "sleeping")]
+    let result = {
+        let sleep_wake = Arc::new(SleepWake::new());
+        initialize(config, sleep_wake.clone(), move |allocator| {
+            #[cfg(feature = "verbose")]
+            let index = allocator.index();
+            let mut root = Root::new(allocator);
+            let result = func(&mut root);
+            let mut inactive_since = None;
+            let mut counter = 0;
+            #[cfg(feature = "verbose")]
+            let mut went_asleep = 0;
+            #[cfg(feature = "verbose")]
+            let mut step_count = 0;
+            while {
+                #[cfg(feature = "verbose")]
+                {
+                    step_count += 1;
+                    if step_count % 1000000 == 0 {
+                        println!("[{}] steps: {}", index, step_count);
+                    }
+                }
+                let (active, activity) = root.step();
+                if activity == Activity::Done {
+                    if inactive_since.is_none() {
+                        inactive_since = Some(time::precise_time_ns());
+                    }
+                    if time::precise_time_ns() - inactive_since.unwrap_or(time::precise_time_ns()) > SPIN_TIME_NS {
+                        #[cfg(feature = "verbose")]
+                        {
+                            went_asleep += 1;
+                            if went_asleep % 100000 == 0 {
+                                println!("[{}] slept: {}", index, went_asleep);
+                            }
+                        }
+                        sleep_wake.wait(&mut counter);
+                        inactive_since = None;
+                    }
+                } else {
+                    inactive_since = None;
+                }
+                active
+            } { }
+            result
+        })
+    };
+
+    #[cfg(not(feature = "sleeping"))]
+    let result = {
+        initialize(config, move |allocator| {
+            let mut root = Root::new(allocator);
+            let result = func(&mut root);
+            while {
+                let (active, _) = root.step();
+                active
+            } { }
+            result
+        })
+    };
+
+    result
 }
 
 

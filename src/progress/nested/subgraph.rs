@@ -10,7 +10,7 @@ use timely_communication::Allocate;
 use order::PartialOrder;
 
 use progress::frontier::{MutableAntichain, Antichain};
-use progress::{Timestamp, PathSummary, Operate};
+use progress::{Timestamp, PathSummary, Operate, Activity};
 
 use progress::count_map::CountMap;
 
@@ -301,10 +301,11 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
     // produced/consumed messages, and local internal work should be reported back up.
     fn pull_internal_progress(&mut self, consumed: &mut [CountMap<TOuter>],
                                          internal: &mut [CountMap<TOuter>],
-                                         produced: &mut [CountMap<TOuter>]) -> bool
+                                         produced: &mut [CountMap<TOuter>]) -> (bool, Activity)
     {
         // should be false when there is nothing left to do
         let mut active = false;
+        let mut activity = Activity::Done;
 
         // Step 1: Observe the number of records this instances has accepted as input.
         //
@@ -330,7 +331,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
 
             // if local, update into the local pointstamps, which must be exchanged. otherwise into
             // the global pointstamps, which need not be exchanged.
-            let subactive = if child.local {
+            let (subactive, subactivity) = if child.local {
                 child.pull_pointstamps(
                     &mut self.local_pointstamp_messages,
                     &mut self.local_pointstamp_internal,
@@ -346,6 +347,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
             // if subactive { println!("child {} demands activity!", child.name); }
 
             active = active || subactive;
+            activity = activity.or(subactivity);
         }
 
         // Intermission: exchange pointstamp updates, and then move them to the pointstamps structure.
@@ -439,13 +441,17 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         for child in &self.children {
             // if child.messages.iter().any(|x| x.elements().len() > 0) 
             // { println!("{:?}: child {}[{}] has outstanding messages", self.path, child.name, child.index); }
-            active = active || child.messages.iter().any(|x| x.elements().len() > 0);
+            let child_messages_exist = child.messages.iter().any(|x| x.elements().len() > 0);
+            active = active || child_messages_exist;
+            // activity = activity.or(if child_messages_exist { Activity::Internal } else { Activity::Done });
             // if child.internal.iter().any(|x| x.elements().len() > 0) 
             // { println!("{:?} child {}[{}] has outstanding capabilities", self.path, child.name, child.index); }
-            active = active || child.internal.iter().any(|x| x.elements().len() > 0);
+            let child_internal_exist = child.internal.iter().any(|x| x.elements().len() > 0);
+            active = active || child_internal_exist;
+            // activity = activity.or(if child_internal_exist { Activity::Internal } else { Activity::Done });
         }
 
-        active
+        (active, activity)
     }
 }
 
@@ -874,9 +880,9 @@ impl<T: Timestamp> PerOperatorState<T> {
     }
 
     pub fn pull_pointstamps(&mut self, pointstamp_messages: &mut CountMap<(usize, usize, T)>,
-                                       pointstamp_internal: &mut CountMap<(usize, usize, T)>) -> bool {
+                                       pointstamp_internal: &mut CountMap<(usize, usize, T)>) -> (bool, Activity) {
 
-        let active = {
+        let (active, activity) = {
 
             ::logging::log(&::logging::SCHEDULE, ::logging::ScheduleEvent {
                 id: self.id, start_stop: ::logging::StartStop::Start
@@ -892,28 +898,30 @@ impl<T: Timestamp> PerOperatorState<T> {
                 }
             }
 
-            let result = if let Some(ref mut operator) = self.operator {
+            let (result, mut activity) = if let Some(ref mut operator) = self.operator {
                 operator.pull_internal_progress(
                     &mut self.consumed_buffer[..],
                     &mut self.internal_buffer[..],
                     &mut self.produced_buffer[..],
                 )
             }
-            else { false };
+            else { (false, Activity::Done) };
+
+            let did_work = vec![
+                &self.consumed_buffer,
+                &self.internal_buffer,
+                &self.produced_buffer].iter().any(|buffer|
+                    buffer.iter().any(|cm| cm.len() > 0));
+            activity = activity.or(if did_work { Activity::Internal } else { Activity::Done });
 
             if cfg!(feature = "logging") {
-                let did_work = vec![
-                    &self.consumed_buffer,
-                    &self.internal_buffer,
-                    &self.produced_buffer].iter().any(|buffer|
-                        buffer.iter().any(|cm| cm.len() > 0));
                 ::logging::log(&::logging::SCHEDULE,
                                ::logging::ScheduleEvent {
                                    id: self.id, start_stop: ::logging::StartStop::Stop { activity: did_work }
                                });
             }
 
-            result
+            (result, activity)
         };
 
         // shutting down if nothing left to do
@@ -948,6 +956,6 @@ impl<T: Timestamp> PerOperatorState<T> {
             }
         }
 
-        active
+        (active, activity)
     }
 }

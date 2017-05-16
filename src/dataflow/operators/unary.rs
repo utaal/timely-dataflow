@@ -8,7 +8,7 @@ use progress::nested::subgraph::{Source, Target};
 
 use progress::count_map::CountMap;
 use dataflow::operators::Notificator;
-use progress::{Timestamp, Operate, Antichain};
+use progress::{Timestamp, Operate, Activity, Antichain};
 use dataflow::channels::pushers::Tee;
 use dataflow::channels::pushers::Counter as PushCounter;
 use dataflow::channels::pushers::buffer::Buffer as PushBuffer;
@@ -209,7 +209,7 @@ where T: Timestamp,
 
     fn pull_internal_progress(&mut self, consumed: &mut [CountMap<T>],
                                          internal: &mut [CountMap<T>],
-                                         produced: &mut [CountMap<T>]) -> bool
+                                         produced: &mut [CountMap<T>]) -> (bool, Activity)
     {
         {
             let mut input_handle = new_input_handle(&mut self.input, self.internal_changes.clone());
@@ -224,7 +224,7 @@ where T: Timestamp,
         self.output.inner().pull_progress(&mut produced[0]);
         self.internal_changes.borrow_mut().drain_into(&mut internal[0]);
 
-        false   // no unannounced internal work
+        (false, Activity::Done)   // no unannounced internal work
     }
 
     fn name(&self) -> String { self.name.clone() }

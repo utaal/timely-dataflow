@@ -3,7 +3,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use progress::{Timestamp, Operate, Antichain};
+use progress::{Timestamp, Operate, Activity, Antichain};
 use progress::frontier::MutableAntichain;
 use progress::nested::subgraph::{Source, Target};
 use progress::count_map::CountMap;
@@ -181,7 +181,7 @@ impl<T:Timestamp, D: Data> Operate<T> for Operator<T, D> {
     }
 
     // the scope does nothing. this is actually a problem, because "reachability" assumes all messages on each edge.
-    fn pull_internal_progress(&mut self, consumed: &mut [CountMap<T>], _: &mut [CountMap<T>], produced: &mut [CountMap<T>]) -> bool {
+    fn pull_internal_progress(&mut self, consumed: &mut [CountMap<T>], _: &mut [CountMap<T>], produced: &mut [CountMap<T>]) -> (bool, Activity) {
 
         while let Some((time, data)) = self.input.next() {
             self.output.session(time).give_content(data);
@@ -193,7 +193,7 @@ impl<T:Timestamp, D: Data> Operate<T> for Operator<T, D> {
         self.input.pull_progress(&mut consumed[0]);
         self.output.inner().pull_progress(&mut produced[0]);
 
-        false
+        (false, Activity::Done)
     }
 }
 

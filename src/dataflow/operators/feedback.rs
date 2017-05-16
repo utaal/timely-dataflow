@@ -6,7 +6,7 @@ use std::default::Default;
 
 use {Data, Push};
 
-use progress::{Timestamp, Operate, PathSummary};
+use progress::{Timestamp, Operate, Activity, PathSummary};
 use progress::frontier::Antichain;
 use progress::nested::{Source, Target};
 use progress::count_map::CountMap;
@@ -148,11 +148,11 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
 
     fn pull_internal_progress(&mut self, messages_consumed: &mut [CountMap<T>],
                                         _frontier_progress: &mut [CountMap<T>],
-                                         messages_produced: &mut [CountMap<T>]) -> bool {
+                                         messages_produced: &mut [CountMap<T>]) -> (bool, Activity) {
 
         self.consumed_messages.borrow_mut().drain_into(&mut messages_consumed[0]);
         self.produced_messages.borrow_mut().drain_into(&mut messages_produced[0]);
-        false
+        (false, Activity::Done)
     }
 
     fn notify_me(&self) -> bool { false }

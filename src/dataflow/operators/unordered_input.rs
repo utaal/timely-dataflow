@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::default::Default;
 
 use progress::frontier::Antichain;
-use progress::{Operate, Timestamp};
+use progress::{Operate, Activity, Timestamp};
 use progress::nested::subgraph::Source;
 use progress::count_map::CountMap;
 
@@ -124,11 +124,11 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
 
     fn pull_internal_progress(&mut self,_consumed: &mut [CountMap<T>],
                                          internal: &mut [CountMap<T>],
-                                         produced: &mut [CountMap<T>]) -> bool
+                                         produced: &mut [CountMap<T>]) -> (bool, Activity)
     {
         self.produced.borrow_mut().drain_into(&mut produced[0]);
         self.internal.borrow_mut().drain_into(&mut internal[0]);
-        return false;
+        return (false, Activity::Done);
     }
 
     fn notify_me(&self) -> bool { false }

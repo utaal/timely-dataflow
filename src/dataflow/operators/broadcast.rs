@@ -4,7 +4,7 @@ use ::ExchangeData;
 use progress::nested::subgraph::{Source, Target};
 use dataflow::{Stream, Scope};
 use progress::count_map::CountMap;
-use progress::{Timestamp, Operate, Antichain};
+use progress::{Timestamp, Operate, Activity, Antichain};
 use dataflow::channels::{Message};
 use dataflow::channels::pushers::Counter as PushCounter;
 use dataflow::channels::pushers::buffer::Buffer as PushBuffer;
@@ -83,7 +83,7 @@ impl<T: Timestamp, D: ExchangeData> Operate<T> for BroadcastOperator<T, D> {
 
     fn pull_internal_progress(&mut self, consumed: &mut [CountMap<T>],
                                          _internal: &mut [CountMap<T>],
-                                         produced: &mut [CountMap<T>]) -> bool {
+                                         produced: &mut [CountMap<T>]) -> (bool, Activity) {
 
         while let Some((time, data)) = self.input.next() {
             self.output.session(time).give_content(data);
@@ -91,7 +91,7 @@ impl<T: Timestamp, D: ExchangeData> Operate<T> for BroadcastOperator<T, D> {
         self.output.cease();
         self.input.pull_progress(&mut consumed[self.index]);
         self.output.inner().pull_progress(&mut produced[0]);
-        false
+        (false, Activity::Done)
     }
 
     fn notify_me(&self) -> bool { false }

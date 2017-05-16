@@ -5,6 +5,9 @@ use std::sync::mpsc::{Sender, Receiver, channel};
 use allocator::{Allocate, Thread};
 use {Push, Pull};
 
+#[cfg(feature = "sleeping")]
+use {SleepWake};
+
 // A specific Communicator for inter-thread intra-process communication
 pub struct Process {
     inner:      Thread,                         // inner Thread
@@ -12,10 +15,27 @@ pub struct Process {
     peers:      usize,                          // number of peer allocators (for typed channel allocation).
     allocated:  usize,                          // indicates how many have been allocated (locally).
     channels:   Arc<Mutex<Vec<Box<Any+Send>>>>, // Box<Any+Send> -> Box<Vec<Option<(Vec<Sender<T>>, Receiver<T>)>>>
+    #[cfg(feature = "sleeping")]
+    sleep_wake: Arc<SleepWake>,
 }
 
 impl Process {
     pub fn inner<'a>(&'a mut self) -> &'a mut Thread { &mut self.inner }
+
+    #[cfg(feature = "sleeping")]
+    pub fn new_vector(count: usize, sleep_wake: Arc<SleepWake>) -> Vec<Process> {
+        let channels = Arc::new(Mutex::new(Vec::new()));
+        (0 .. count).map(|index| Process {
+            inner:      Thread,
+            index:      index,
+            peers:      count,
+            allocated:  0,
+            channels:   channels.clone(),
+            sleep_wake: sleep_wake.clone(),
+        }).collect()
+    }
+
+    #[cfg(not(feature = "sleeping"))]
     pub fn new_vector(count: usize) -> Vec<Process> {
         let channels = Arc::new(Mutex::new(Vec::new()));
         (0 .. count).map(|index| Process {
@@ -42,7 +62,11 @@ impl Allocate for Process {
             let mut pullers = Vec::new();
             for _ in 0..self.peers {
                 let (s, r): (Sender<T>, Receiver<T>) = channel();
-                pushers.push(Pusher { target: s });
+                pushers.push(Pusher {
+                    target: s,
+                    #[cfg(feature = "sleeping")]
+                    sleep_wake: self.sleep_wake.clone()
+                });
                 pullers.push(Puller { source: r, current: None });
             }
 
@@ -75,11 +99,17 @@ impl Allocate for Process {
 // an observer wrapping a Rust channel
 struct Pusher<T> {
     target: Sender<T>,
+    #[cfg(feature = "sleeping")]
+    sleep_wake: Arc<SleepWake>,
 }
 
 impl<T> Clone for Pusher<T> {
     fn clone(&self) -> Self {
-        Pusher { target: self.target.clone() }
+        Pusher {
+            target: self.target.clone(),
+            #[cfg(feature = "sleeping")]
+            sleep_wake: self.sleep_wake.clone(),
+        }
     }
 }
 
@@ -87,6 +117,8 @@ impl<T> Push<T> for Pusher<T> {
     #[inline] fn push(&mut self, element: &mut Option<T>) {
         if let Some(element) = element.take() {
             self.target.send(element).unwrap();
+            #[cfg(feature = "sleeping")]
+            self.sleep_wake.notify_all();
         }
     }
 }

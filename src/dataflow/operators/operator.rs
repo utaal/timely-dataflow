@@ -11,7 +11,7 @@ use dataflow::channels::message::Content;
 use progress::nested::subgraph::{Source, Target};
 
 use progress::count_map::CountMap;
-use progress::{Timestamp, Operate, Antichain};
+use progress::{Timestamp, Operate, Activity, Antichain};
 use progress::frontier::MutableAntichain;
 use dataflow::channels::pushers::{Tee, TeeHelper};
 use dataflow::channels::pushers::Counter as PushCounter;
@@ -568,7 +568,7 @@ Operate<T> for OperatorImpl<T, L, DO> {
 
     fn pull_internal_progress(&mut self, consumed: &mut [CountMap<T>],
                                          internal: &mut [CountMap<T>],
-                                         produced: &mut [CountMap<T>]) -> bool
+                                         produced: &mut [CountMap<T>]) -> (bool, Activity)
     {
         {
             let mut output_handle = new_output_handle(&mut self.output);
@@ -579,7 +579,7 @@ Operate<T> for OperatorImpl<T, L, DO> {
         self.output.inner().pull_progress(&mut produced[0]);
         self.internal_changes.borrow_mut().drain_into(&mut internal[0]);
 
-        false   // no unannounced internal work
+        (false, Activity::Done)   // no unannounced internal work
     }
 
     fn name(&self) -> String { self.name.clone() }

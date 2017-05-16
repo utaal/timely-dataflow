@@ -82,7 +82,7 @@ use dataflow::channels::pushers::Tee;
 
 use progress::count_map::CountMap;
 use progress::nested::subgraph::{Source, Target};
-use progress::{Timestamp, Operate, Antichain};
+use progress::{Timestamp, Operate, Activity, Antichain};
 
 use abomonation::Abomonation;
 
@@ -495,12 +495,12 @@ impl<T:Timestamp, D: Data, P: EventPusher<T, D>> Operate<T> for CaptureOperator<
         counts[0].clear();
     }
 
-    fn pull_internal_progress(&mut self, consumed: &mut [CountMap<T>],  _: &mut [CountMap<T>], _: &mut [CountMap<T>]) -> bool {
+    fn pull_internal_progress(&mut self, consumed: &mut [CountMap<T>],  _: &mut [CountMap<T>], _: &mut [CountMap<T>]) -> (bool, Activity) {
         while let Some((time, data)) = self.input.next() {
             self.events.push(Event::Messages(time.clone(), data.deref_mut().clone()));
         }
         self.input.pull_progress(&mut consumed[0]);
-        false
+        (false, Activity::Done)
     }
 }
 
@@ -537,7 +537,7 @@ impl<T:Timestamp, D: Data, I: EventIterator<T, D>> Operate<T> for ReplayOperator
         }
     }
 
-    fn pull_internal_progress(&mut self, _: &mut [CountMap<T>], internal: &mut [CountMap<T>], produced: &mut [CountMap<T>]) -> bool {
+    fn pull_internal_progress(&mut self, _: &mut [CountMap<T>], internal: &mut [CountMap<T>], produced: &mut [CountMap<T>]) -> (bool, Activity) {
 
         while let Some(event) = self.events.next() {
             match *event {
@@ -559,6 +559,6 @@ impl<T:Timestamp, D: Data, I: EventIterator<T, D>> Operate<T> for ReplayOperator
         self.output.cease();
         self.output.inner().pull_progress(&mut produced[0]);
 
-        false
+        (false, Activity::Done)
     }
 }

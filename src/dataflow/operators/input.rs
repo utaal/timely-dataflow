@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::default::Default;
 
 use progress::frontier::Antichain;
-use progress::{Operate, Timestamp};
+use progress::{Operate, Activity, Timestamp};
 use progress::nested::subgraph::Source;
 use progress::count_map::CountMap;
 use progress::timestamp::RootTimestamp;
@@ -102,11 +102,11 @@ impl<T:Timestamp+Ord> Operate<Product<RootTimestamp, T>> for Operator<T> {
 
     fn pull_internal_progress(&mut self,_messages_consumed: &mut [CountMap<Product<RootTimestamp, T>>],
                                          frontier_progress: &mut [CountMap<Product<RootTimestamp, T>>],
-                                         messages_produced: &mut [CountMap<Product<RootTimestamp, T>>]) -> bool
+                                         messages_produced: &mut [CountMap<Product<RootTimestamp, T>>]) -> (bool, Activity)
     {
         self.messages.borrow_mut().drain_into(&mut messages_produced[0]);
         self.progress.borrow_mut().drain_into(&mut frontier_progress[0]);
-        false
+        (false, Activity::Done)
     }
 
     fn notify_me(&self) -> bool { false }

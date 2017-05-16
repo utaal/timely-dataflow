@@ -4,6 +4,25 @@ use std::default::Default;
 
 use progress::{Timestamp, CountMap, Antichain};
 
+/// Describes the state of an operator.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Activity {
+    /// No need to schedule again
+    Done,
+    /// Schedule again immediately
+    Internal,
+}
+
+impl Activity {
+    /// Combine this and other activity reports.
+    pub fn or(&self, other: Activity) -> Activity {
+        match (self, other) {
+            (&Activity::Internal, _) => Activity::Internal,
+            (_, Activity::Internal) => Activity::Internal,
+            (&Activity::Done, Activity::Done) => Activity::Done,
+        }
+    }
+}
 
 /// Methods for describing an operators topology, and the progress it makes.
 pub trait Operate<T: Timestamp> {
@@ -91,7 +110,7 @@ pub trait Operate<T: Timestamp> {
     /// its children are reporting partial information and which are complete.
     fn pull_internal_progress(&mut self, consumed: &mut [CountMap<T>],          // to populate
                                          internal: &mut [CountMap<T>],          // to populate
-                                         produced: &mut [CountMap<T>]) -> bool; // to populate
+                                         produced: &mut [CountMap<T>]) -> (bool, Activity); // to populate
 
     /// A descripitive name for the operator
     fn name(&self) -> String;

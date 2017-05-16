@@ -15,6 +15,8 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use allocator::{Process, Binary};
 use drain::DrainExt;
 
+use SleepWake;
+
 // TODO : Much of this only relates to BinaryWriter/BinaryReader based communication, not networking.
 // TODO : Could be moved somewhere less networking-specific.
 
@@ -73,15 +75,17 @@ struct BinaryReceiver<R: Read> {
     buffer:     Vec<u8>,    // current working buffer
     length:     usize,
     targets:    Switchboard<Sender<Vec<u8>>>,
+    sleep_wake:    Option<Arc<SleepWake>>,
 }
 
 impl<R: Read> BinaryReceiver<R> {
-    fn new(reader: R, channels: Receiver<((usize, usize), Sender<Vec<u8>>)>) -> BinaryReceiver<R> {
+    fn new(reader: R, channels: Receiver<((usize, usize), Sender<Vec<u8>>)>, sleep_wake: Option<Arc<SleepWake>>) -> BinaryReceiver<R> {
         BinaryReceiver {
             reader:     reader,
             buffer:     vec![0u8; 1 << 20],
             length:     0,
             targets:    Switchboard::new(channels),
+            sleep_wake: sleep_wake,
         }
     }
 
@@ -120,6 +124,9 @@ impl<R: Read> BinaryReceiver<R> {
                 }
                 self.length = remaining;
             }
+
+            #[cfg(feature = "sleeping")]
+            self.sleep_wake.as_ref().unwrap().notify_all();
         }
     }
 }
@@ -196,7 +203,7 @@ impl<T:Send> Switchboard<T> {
 }
 
 /// Initializes network connections
-pub fn initialize_networking(addresses: Vec<String>, my_index: usize, threads: usize, noisy: bool) -> Result<Vec<Binary>> {
+pub fn initialize_networking(addresses: Vec<String>, my_index: usize, threads: usize, noisy: bool, sleep_wake: Option<Arc<SleepWake>>) -> Result<Vec<Binary>> {
 
     let processes = addresses.len();
     let hosts1 = Arc::new(addresses);
@@ -228,7 +235,7 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: usize, threads: u
 
             let mut sender = BinarySender::new(BufWriter::with_capacity(1 << 20, stream.try_clone().unwrap()),
                                                sender_channels_r);
-            let mut recver = BinaryReceiver::new(stream.try_clone().unwrap(), reader_channels_r);
+            let mut recver = BinaryReceiver::new(stream.try_clone().unwrap(), reader_channels_r, sleep_wake.clone());
 
             // start senders and receivers associated with this stream
             thread::Builder::new().name(format!("send thread {}", index))
@@ -241,7 +248,13 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: usize, threads: u
         }
     }
 
-    let proc_comms = Process::new_vector(threads);
+    let proc_comms = {
+        #[cfg(feature = "sleeping")]
+        let res = Process::new_vector(threads, sleep_wake.unwrap());
+        #[cfg(not(feature = "sleeping"))]
+        let res = Process::new_vector(threads);
+        res
+    };
 
     let mut results = Vec::new();
     for (index, proc_comm) in proc_comms.into_iter().enumerate() {
