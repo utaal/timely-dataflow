@@ -78,7 +78,6 @@ pub mod initialize;
 mod drain;
 
 use std::any::Any;
-use std::sync::{Mutex, Condvar};
 use abomonation::{Abomonation, encode, decode};
 
 pub use allocator::Generic as Allocator;
@@ -150,32 +149,23 @@ impl<T, P: ?Sized + Pull<T>> Pull<T> for Box<P> {
 }
 
 pub struct SleepWake {
-    mutex: Mutex<usize>,
-    condvar: Condvar,
+    notifies: Vec<Box<Fn()->()+Sync+Send>>,
 }
 
 impl SleepWake {
     pub fn new() -> SleepWake {
         SleepWake {
-            mutex: Mutex::new(0),
-            condvar: Condvar::new(),
+            notifies: Vec::new(),
         }
+    }
+
+    pub fn subscribe(&mut self, notify: Box<Fn()->()+Sync+Send>) {
+        self.notifies.push(notify);
     }
 
     fn notify_all(&self) {
-        {
-            let mut counter = self.mutex.lock().unwrap();
-            *counter += 1;
-            // println!("🔥 {}", *counter);
+        for n in self.notifies.iter() {
+            (n)();
         }
-        self.condvar.notify_all();
-    }
-
-    pub fn wait(&self, client_counter: &mut usize) {
-        let mut counter = self.mutex.lock().unwrap();
-        if *counter == *client_counter {
-            counter = self.condvar.wait(counter).unwrap();
-        }
-        *client_counter = *counter;
     }
 }

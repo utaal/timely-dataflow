@@ -3,7 +3,7 @@
 extern crate time;
 
 #[cfg(feature = "sleeping")]
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, Condvar};
 
 use timely_communication::{initialize, Configuration, Allocator, WorkerGuards};
 
@@ -72,7 +72,11 @@ where T: Send+'static,
     };
 
     #[cfg(feature = "sleeping")]
-    panic!("feature sleeping is not supported in examples");
+    let guards: Result<WorkerGuards<T>, String> = {
+        panic!("feature sleeping is not supported in examples");
+        unimplemented!();
+    };
+
     #[cfg(not(feature = "sleeping"))]
     let guards = initialize(Configuration::Thread, body);
 
@@ -140,14 +144,31 @@ where T:Send+'static,
 
     #[cfg(feature = "sleeping")]
     let result = {
-        let sleep_wake = Arc::new(SleepWake::new());
+
+        let mutex = Arc::new(Mutex::new(0));
+        let condvar = Arc::new(Condvar::new());
+
+        let sleep_wake = Arc::new({ 
+            let mutex = mutex.clone();
+            let condvar = condvar.clone();
+            let mut sleep_wake = SleepWake::new();
+            sleep_wake.subscribe(Box::new(move || {
+                {
+                    let mut counter = mutex.lock().unwrap();
+                    *counter += 1;
+                }
+                condvar.notify_all();
+            }));
+            sleep_wake
+        });
+
         initialize(config, sleep_wake.clone(), move |allocator| {
             #[cfg(feature = "verbose")]
             let index = allocator.index();
             let mut root = Root::new(allocator);
             let result = func(&mut root);
             let mut inactive_since = None;
-            let mut counter = 0;
+            let mut client_counter = 0;
             #[cfg(feature = "verbose")]
             let mut went_asleep = 0;
             #[cfg(feature = "verbose")]
@@ -173,7 +194,12 @@ where T:Send+'static,
                                 println!("[{}] slept: {}", index, went_asleep);
                             }
                         }
-                        sleep_wake.wait(&mut counter);
+                        //sleep_wake.wait(&mut client_counter);
+                        let mut counter = mutex.lock().unwrap();
+                        if *counter == client_counter {
+                            counter = condvar.wait(counter).unwrap();
+                        }
+                        client_counter = *counter;
                         inactive_since = None;
                     }
                 } else {
