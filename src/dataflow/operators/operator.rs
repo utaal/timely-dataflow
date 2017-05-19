@@ -300,7 +300,7 @@ pub fn source<G: Scope, D, B, L>(scope: &G, name: &str, constructor: B) -> Strea
 where
     D: Data,
     B: FnOnce(Capability<G::Timestamp>) -> L,
-    L: FnMut(&mut OutputHandle<G::Timestamp, D, Tee<G::Timestamp, D>>)+'static {
+    L: FnMut(&mut OutputHandle<G::Timestamp, D, Tee<G::Timestamp, D>>)->Activity+'static {
 
     let (cap, internal_changes) = make_default_cap::<G>();
     let mut logic = constructor(cap);
@@ -313,6 +313,7 @@ where
         scope.peers(),
         move |_consumed, _internal, _frontiers, output| {
             logic(output);
+            Activity::Done
         },
         internal_changes,
         targets,
@@ -348,6 +349,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
                     logic(&mut input_handle, output);
                 }
                 input.pull_progress(&mut consumed[0]);
+                Activity::Done
             },
             internal_changes,
             targets,
@@ -381,6 +383,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
                     logic(&mut input_handle, output);
                 }
                 input.pull_progress(&mut consumed[0]);
+                Activity::Done
             },
             internal_changes,
             targets,
@@ -420,6 +423,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
                 }
                 input1.pull_progress(&mut consumed[0]);
                 input2.pull_progress(&mut consumed[1]);
+                Activity::Done
             },
             internal_changes,
             targets,
@@ -462,6 +466,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
                 }
                 input1.pull_progress(&mut consumed[0]);
                 input2.pull_progress(&mut consumed[1]);
+                Activity::Done
             },
             internal_changes,
             targets,
@@ -482,7 +487,7 @@ struct OperatorImpl<T: Timestamp,
                         &mut [CountMap<T>],
                         Rc<RefCell<CountMap<T>>>,
                         &[MutableAntichain<T>],
-                        &mut OutputHandle<T, DO, Tee<T, DO>>),
+                        &mut OutputHandle<T, DO, Tee<T, DO>>) -> Activity,
                     DO: Data> {
     name:             String,
     input_count:      usize,
@@ -499,7 +504,7 @@ impl<T: Timestamp,
          &mut [CountMap<T>],
          Rc<RefCell<CountMap<T>>>,
          &[MutableAntichain<T>],
-         &mut OutputHandle<T, DO, Tee<T, DO>>),
+         &mut OutputHandle<T, DO, Tee<T, DO>>) -> Activity,
      DO: Data>
 OperatorImpl<T, L, DO> {
 
@@ -536,7 +541,7 @@ impl<T: Timestamp,
          &mut [CountMap<T>],
          Rc<RefCell<CountMap<T>>>,
          &[MutableAntichain<T>],
-         &mut OutputHandle<T, DO, Tee<T, DO>>),
+         &mut OutputHandle<T, DO, Tee<T, DO>>) -> Activity,
      DO: Data>
 Operate<T> for OperatorImpl<T, L, DO> {
 

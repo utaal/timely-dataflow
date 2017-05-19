@@ -443,12 +443,10 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
             // { println!("{:?}: child {}[{}] has outstanding messages", self.path, child.name, child.index); }
             let child_messages_exist = child.messages.iter().any(|x| x.elements().len() > 0);
             active = active || child_messages_exist;
-            // activity = activity.or(if child_messages_exist { Activity::Internal } else { Activity::Done });
             // if child.internal.iter().any(|x| x.elements().len() > 0) 
             // { println!("{:?} child {}[{}] has outstanding capabilities", self.path, child.name, child.index); }
             let child_internal_exist = child.internal.iter().any(|x| x.elements().len() > 0);
             active = active || child_internal_exist;
-            // activity = activity.or(if child_internal_exist { Activity::Internal } else { Activity::Done });
         }
 
         (active, activity)
@@ -907,14 +905,12 @@ impl<T: Timestamp> PerOperatorState<T> {
             }
             else { (false, Activity::Done) };
 
-            let did_work = vec![
-                &self.consumed_buffer,
-                &self.internal_buffer,
-                &self.produced_buffer].iter().any(|buffer|
-                    buffer.iter().any(|cm| cm.len() > 0));
-            activity = activity.or(if did_work { Activity::Internal } else { Activity::Done });
-
             if cfg!(feature = "logging") {
+                let did_work = vec![
+                    &self.consumed_buffer,
+                    &self.internal_buffer,
+                    &self.produced_buffer].iter().any(|buffer|
+                        buffer.iter().any(|cm| cm.len() > 0));
                 ::logging::log(&::logging::SCHEDULE,
                                ::logging::ScheduleEvent {
                                    id: self.id, start_stop: ::logging::StartStop::Stop { activity: did_work }

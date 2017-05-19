@@ -19,7 +19,7 @@ fn main() {
                   .to_stream(scope)
                   .concat(&cycle)
                   // .inspect(|x| if x % 10000 == 0 { println!("📦 {}", x); })
-                  .exchange(|&x| x)
+                  .exchange(|&x| x / 2)
                   .map_in_place(move |x| {
                       if busy_loop {
                           for k in (0..1000000000u64).map(|x| x * 2) {

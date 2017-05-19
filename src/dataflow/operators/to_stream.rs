@@ -1,6 +1,7 @@
 //! Conversion to the `Stream` type from iterators.
 
 use progress::Timestamp;
+use progress::Activity;
 
 use Data;
 use dataflow::channels::Content;
@@ -43,9 +44,11 @@ impl<T: Timestamp, I: IntoIterator+'static> ToStream<T, I::Item> for I where I::
                     for element in iterator.by_ref().take((256 * Content::<I::Item>::default_length()) - 1) {
                         session.give(element);
                     }
+                    Activity::Internal
                 }
                 else {
                     capability = None;
+                    Activity::Done
                 }
             }
         })
