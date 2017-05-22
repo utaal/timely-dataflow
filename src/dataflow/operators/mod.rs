@@ -27,6 +27,7 @@ pub use self::probe::Probe;
 pub use self::to_stream::ToStream;
 pub use self::capture::Capture;
 pub use self::operator::Operator;
+pub use self::to_timely_stream::ToTimelyStream;
 
 pub use self::reclock::Reclock;
 pub use self::count::Accumulate;
@@ -50,6 +51,7 @@ pub mod probe;
 pub mod to_stream;
 pub mod capture;
 pub mod operator;
+pub mod to_timely_stream;
 
 pub mod aggregation;
 

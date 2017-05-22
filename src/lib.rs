@@ -72,6 +72,9 @@ pub mod dataflow;
 pub mod execute;
 pub mod order;
 
+#[cfg(feature = "sleeping")]
+pub mod sleepwake;
+
 // #[cfg(feature = "logging")]
 pub mod logging;
 
@@ -88,6 +91,20 @@ impl<T: ::abomonation::Abomonation+Clone+'static> Data for T { }
 pub trait ExchangeData: Data + timely_communication::Data { }
 impl<T: Data + timely_communication::Data> ExchangeData for T { }
 
+use timely_communication::SleepWake;
+
+/// TODO
+pub trait NotifyAll {
+    /// TODO
+    fn notify_all(&self);
+}
+
+impl NotifyAll for SleepWake {
+    #[inline(always)]
+    fn notify_all(&self) {
+        <SleepWake>::notify_all(&self);
+    }
+}
 
 // /// A composite trait for types usable in timely dataflow.
 // pub trait Data: timely_communication::Data + abomonation::Abomonation { }

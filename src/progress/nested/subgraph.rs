@@ -896,7 +896,7 @@ impl<T: Timestamp> PerOperatorState<T> {
                 }
             }
 
-            let (result, mut activity) = if let Some(ref mut operator) = self.operator {
+            let (result, activity) = if let Some(ref mut operator) = self.operator {
                 operator.pull_internal_progress(
                     &mut self.consumed_buffer[..],
                     &mut self.internal_buffer[..],

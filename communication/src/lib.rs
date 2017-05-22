@@ -149,22 +149,22 @@ impl<T, P: ?Sized + Pull<T>> Pull<T> for Box<P> {
 }
 
 pub struct SleepWake {
-    notifies: Vec<Box<Fn()->()+Sync+Send>>,
+    notifies: std::sync::Mutex<Vec<Box<Fn()->()+Sync+Send>>>,
 }
 
 impl SleepWake {
     pub fn new() -> SleepWake {
         SleepWake {
-            notifies: Vec::new(),
+            notifies: std::sync::Mutex::new(Vec::new()),
         }
     }
 
-    pub fn subscribe(&mut self, notify: Box<Fn()->()+Sync+Send>) {
-        self.notifies.push(notify);
+    pub fn subscribe(&self, notify: Box<Fn()->()+Sync+Send>) {
+        self.notifies.lock().unwrap().push(notify);
     }
 
-    fn notify_all(&self) {
-        for n in self.notifies.iter() {
+    pub fn notify_all(&self) {
+        for n in self.notifies.lock().unwrap().iter() {
             (n)();
         }
     }
