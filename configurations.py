@@ -1,8 +1,8 @@
 features = [('spinning', ''), ('sleeping', '--features sleeping')]
 experiment = [
         ('pingpong blackbox', '--example pingpong', '100 true'),
-        ('pingpong', '--example pingpong', '1000000 false'),
-        ('bfs', '--example bfs', '10000000 10000000'),
+        ('pingpong', '--example pingpong', '10000000 false'),
+        ('bfs', '--example bfs', '1000000000 1000000000'),
 ]
 
 configurations = [
