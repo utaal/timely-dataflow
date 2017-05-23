@@ -33,3 +33,40 @@ rand="0.3.13"
 [[example]]
 name = "sleep"
 required-features = ["sleeping"]
+
+[[example]]
+name = "barrier"
+
+[[example]]
+name = "bfs"
+
+[[example]]
+name = "broadcast"
+
+[[example]]
+name = "capture_recv"
+
+[[example]]
+name = "capture_send"
+
+[[example]]
+name = "distinct"
+
+[[example]]
+name = "hello"
+
+[[example]]
+name = "pingpong"
+
+[[example]]
+name = "rc"
+
+[[example]]
+name = "simple"
+
+[[example]]
+name = "unionfind"
+
+[[example]]
+name = "unordered_input"
+
