@@ -9,7 +9,7 @@ use allocator::{Thread, Process, Generic};
 use networking::initialize_networking;
 
 #[cfg(feature = "sleeping")]
-use SleepWake;
+use NotifyHook;
 
 /// Possible configurations for the communication infrastructure.
 pub enum Configuration {
@@ -76,7 +76,7 @@ impl Configuration {
 }
 
 #[cfg(feature = "sleeping")]
-fn create_allocators(config: Configuration, sleep_wake: Arc<SleepWake>) -> Result<Vec<Generic>,String> {
+fn create_allocators(config: Configuration, sleep_wake: Arc<NotifyHook>) -> Result<Vec<Generic>,String> {
     match config {
         Configuration::Thread => Ok(vec![Generic::Thread(Thread)]),
         Configuration::Process(threads) => Ok(Process::new_vector(threads, sleep_wake).into_iter().map(|x| Generic::Process(x)).collect()),
@@ -167,7 +167,7 @@ fn create_allocators(config: Configuration) -> Result<Vec<Generic>,String> {
 /// result: Ok(1)
 /// ```
 #[cfg(feature = "sleeping")]
-pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(config: Configuration, sleep_wake: Arc<SleepWake>, func: F) -> Result<WorkerGuards<T>,String> {
+pub fn initialize_sleep<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(config: Configuration, sleep_wake: Arc<NotifyHook>, func: F) -> Result<WorkerGuards<T>,String> {
 
     let allocators = try!(create_allocators(config, sleep_wake));
     let logic = Arc::new(func);
@@ -184,10 +184,14 @@ pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(config: C
     Ok(WorkerGuards { guards: guards })
 }
 
-#[cfg(not(feature = "sleeping"))]
 pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(config: Configuration, func: F) -> Result<WorkerGuards<T>,String> {
 
+    #[cfg(feature = "sleeping")]
+    let allocators = try!(create_allocators(config, Arc::new(NotifyHook::new())));
+
+    #[cfg(not(feature = "sleeping"))]
     let allocators = try!(create_allocators(config));
+
     let logic = Arc::new(func);
 
     let mut guards = Vec::new();

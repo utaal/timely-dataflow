@@ -64,6 +64,7 @@ extern crate timely_communication;
 extern crate time;
 
 pub use execute::{execute, execute_from_args, example};
+
 pub use timely_communication::{Push, Pull, Configuration};
 pub use order::PartialOrder;
 
@@ -73,7 +74,7 @@ pub mod execute;
 pub mod order;
 
 #[cfg(feature = "sleeping")]
-pub mod sleepwake;
+pub mod sleep;
 
 // #[cfg(feature = "logging")]
 pub mod logging;
@@ -91,18 +92,18 @@ impl<T: ::abomonation::Abomonation+Clone+'static> Data for T { }
 pub trait ExchangeData: Data + timely_communication::Data { }
 impl<T: Data + timely_communication::Data> ExchangeData for T { }
 
-use timely_communication::SleepWake;
+use timely_communication::NotifyHook;
 
-/// TODO
+/// An interface to notify worker threads.
 pub trait NotifyAll {
-    /// TODO
+    /// Notify all worker threads.
     fn notify_all(&self);
 }
 
-impl NotifyAll for SleepWake {
+impl NotifyAll for NotifyHook {
     #[inline(always)]
     fn notify_all(&self) {
-        <SleepWake>::notify_all(&self);
+        <NotifyHook>::notify_all(&self);
     }
 }
 

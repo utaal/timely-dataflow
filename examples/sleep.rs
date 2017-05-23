@@ -7,16 +7,15 @@ use timely::dataflow::Stream;
 use timely::dataflow::operators::*;
 use timely::dataflow::operators::to_timely_stream::StreamInput;
 
-use timely_communication::SleepWake;
-use timely::sleepwake;
+use timely::sleep;
 use timely::progress::Activity;
 use timely::progress::timestamp::RootTimestamp;
 
+use timely::sleep::{Runner, Communication};
+
 fn main() {
-    let sleep_wake = Arc::new(SleepWake::new());
     // initializes and runs a timely dataflow.
-    timely::execute_from_args(std::env::args(), sleep_wake.clone(), move |worker| {
-        let notifier = sleepwake::Notifier::new(sleep_wake.clone());
+    Communication::execute_from_args(std::env::args(), move |worker, notifier| {
         let (sender, receiver) = notifier.new_async_channel();
 
         // create a new input, exchange data, and inspect its output

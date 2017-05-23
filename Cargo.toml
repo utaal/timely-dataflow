@@ -14,7 +14,7 @@ keywords = ["timely", "dataflow"]
 license = "MIT"
 
 [features]
-default=["verbose"]
+default=[]
 logging=[]
 sleeping=["timely_communication/sleeping"]
 verbose=[]
@@ -29,3 +29,7 @@ time="0.1.34"
 [dev-dependencies]
 getopts="0.2.14"
 rand="0.3.13"
+
+[[example]]
+name = "sleep"
+required-features = ["sleeping"]

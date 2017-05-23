@@ -6,7 +6,7 @@ use allocator::{Allocate, Thread};
 use {Push, Pull};
 
 #[cfg(feature = "sleeping")]
-use {SleepWake};
+use {NotifyHook};
 
 // A specific Communicator for inter-thread intra-process communication
 pub struct Process {
@@ -16,14 +16,14 @@ pub struct Process {
     allocated:  usize,                          // indicates how many have been allocated (locally).
     channels:   Arc<Mutex<Vec<Box<Any+Send>>>>, // Box<Any+Send> -> Box<Vec<Option<(Vec<Sender<T>>, Receiver<T>)>>>
     #[cfg(feature = "sleeping")]
-    sleep_wake: Arc<SleepWake>,
+    sleep_wake: Arc<NotifyHook>,
 }
 
 impl Process {
     pub fn inner<'a>(&'a mut self) -> &'a mut Thread { &mut self.inner }
 
     #[cfg(feature = "sleeping")]
-    pub fn new_vector(count: usize, sleep_wake: Arc<SleepWake>) -> Vec<Process> {
+    pub fn new_vector(count: usize, sleep_wake: Arc<NotifyHook>) -> Vec<Process> {
         let channels = Arc::new(Mutex::new(Vec::new()));
         (0 .. count).map(|index| Process {
             inner:      Thread,
@@ -100,7 +100,7 @@ impl Allocate for Process {
 struct Pusher<T> {
     target: Sender<T>,
     #[cfg(feature = "sleeping")]
-    sleep_wake: Arc<SleepWake>,
+    sleep_wake: Arc<NotifyHook>,
 }
 
 impl<T> Clone for Pusher<T> {

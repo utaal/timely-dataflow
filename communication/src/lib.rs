@@ -84,6 +84,9 @@ pub use allocator::Generic as Allocator;
 pub use allocator::Allocate;
 pub use initialize::{initialize, Configuration, WorkerGuards};
 
+#[cfg(feature = "sleeping")]
+pub use initialize::initialize_sleep;
+
 /// A composite trait for types that may be used with channels.
 pub trait Data : Send+Any+Serialize+Clone+'static { }
 impl<T: Clone+Send+Any+Serialize+'static> Data for T { }
@@ -148,13 +151,13 @@ impl<T, P: ?Sized + Pull<T>> Pull<T> for Box<P> {
     fn pull(&mut self) -> &mut Option<T> { (**self).pull() }
 }
 
-pub struct SleepWake {
+pub struct NotifyHook {
     notifies: std::sync::Mutex<Vec<Box<Fn()->()+Sync+Send>>>,
 }
 
-impl SleepWake {
-    pub fn new() -> SleepWake {
-        SleepWake {
+impl NotifyHook {
+    pub fn new() -> NotifyHook {
+        NotifyHook {
             notifies: std::sync::Mutex::new(Vec::new()),
         }
     }

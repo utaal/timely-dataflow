@@ -15,7 +15,7 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use allocator::{Process, Binary};
 use drain::DrainExt;
 
-use SleepWake;
+use NotifyHook;
 
 // TODO : Much of this only relates to BinaryWriter/BinaryReader based communication, not networking.
 // TODO : Could be moved somewhere less networking-specific.
@@ -75,11 +75,11 @@ struct BinaryReceiver<R: Read> {
     buffer:     Vec<u8>,    // current working buffer
     length:     usize,
     targets:    Switchboard<Sender<Vec<u8>>>,
-    sleep_wake:    Option<Arc<SleepWake>>,
+    sleep_wake:    Option<Arc<NotifyHook>>,
 }
 
 impl<R: Read> BinaryReceiver<R> {
-    fn new(reader: R, channels: Receiver<((usize, usize), Sender<Vec<u8>>)>, sleep_wake: Option<Arc<SleepWake>>) -> BinaryReceiver<R> {
+    fn new(reader: R, channels: Receiver<((usize, usize), Sender<Vec<u8>>)>, sleep_wake: Option<Arc<NotifyHook>>) -> BinaryReceiver<R> {
         BinaryReceiver {
             reader:     reader,
             buffer:     vec![0u8; 1 << 20],
@@ -203,7 +203,7 @@ impl<T:Send> Switchboard<T> {
 }
 
 /// Initializes network connections
-pub fn initialize_networking(addresses: Vec<String>, my_index: usize, threads: usize, noisy: bool, sleep_wake: Option<Arc<SleepWake>>) -> Result<Vec<Binary>> {
+pub fn initialize_networking(addresses: Vec<String>, my_index: usize, threads: usize, noisy: bool, sleep_wake: Option<Arc<NotifyHook>>) -> Result<Vec<Binary>> {
 
     let processes = addresses.len();
     let hosts1 = Arc::new(addresses);

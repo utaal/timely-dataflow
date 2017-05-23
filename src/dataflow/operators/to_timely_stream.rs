@@ -13,17 +13,17 @@ use dataflow::operators::Capability;
 
 use dataflow::{Stream, Scope};
 
-/// TODO
+/// Represents the input of a to_timely_stream operator.
 pub enum StreamInput<'a, X: 'a> {
-    /// TODO
+    /// A slice of data was received.
     Data(&'a [X]),
-    /// TODO
+    /// The channel was closed.
     Closed,
 }
 
-/// TODO
+/// Converts to a timely `Stream`.
 pub trait ToTimelyStream<X: 'static, T: Timestamp> {
-    /// TODO
+    /// Converts to a timely `Stream` using the logic defined by `builder`.
     fn to_timely_stream<S: Scope<Timestamp=T>, B, L, D: Data>(self, scope: &mut S, builder: B) -> Stream<S, D>
         where
             B: FnOnce(Capability<S::Timestamp>) -> L,
@@ -32,7 +32,7 @@ pub trait ToTimelyStream<X: 'static, T: Timestamp> {
 
 
 impl<X: 'static, T: Timestamp> ToTimelyStream<X, T> for Receiver<X> {
-    fn to_timely_stream<S: Scope<Timestamp=T>, B, L, D: Data>(self, scope: &mut S, mut builder: B) -> Stream<S, D>
+    fn to_timely_stream<S: Scope<Timestamp=T>, B, L, D: Data>(self, scope: &mut S, builder: B) -> Stream<S, D>
         where
             B: FnOnce(Capability<S::Timestamp>) -> L,
             L: FnMut(StreamInput<X>, &mut OutputHandle<S::Timestamp, D, Tee<S::Timestamp, D>>)->()+'static {

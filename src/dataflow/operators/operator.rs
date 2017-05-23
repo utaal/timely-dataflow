@@ -270,6 +270,7 @@ fn binary_base<G: Scope, D1: Data, D2: Data, D3: Data, P1, P2>(
 /// use timely::dataflow::operators::Inspect;
 /// use timely::dataflow::operators::operator::source;
 /// use timely::dataflow::Scope;
+/// use timely::progress::Activity;
 ///
 /// timely::example(|scope| {
 ///
@@ -291,6 +292,8 @@ fn binary_base<G: Scope, D1: Data, D2: Data, D3: Data, P1, P2>(
 ///             }
 ///
 ///             if done { cap = None; }
+///
+///             Activity::Done
 ///         }
 ///     })
 ///     .inspect(|x| println!("number: {:?}", x));
