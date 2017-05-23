@@ -2,6 +2,7 @@ extern crate time;
 extern crate rand;
 extern crate timely;
 extern crate timely_sort;
+extern crate timely_communication;
 
 use std::collections::HashMap;
 
@@ -11,14 +12,22 @@ use timely_sort::LSBRadixSorter as Sorter;
 
 use timely::dataflow::operators::*;
 use timely::dataflow::channels::pact::Exchange;
+
+use timely_communication::Allocator;
+use timely::dataflow::scopes::Root;
+
+#[cfg(feature = "sleeping")]
+use timely::sleep;
+#[cfg(feature = "sleeping")]
+use timely::sleep::Runner;
+
 fn main() {
 
     // command-line args: numbers of nodes and edges in the random graph.
     let nodes: usize = std::env::args().nth(1).unwrap().parse().unwrap();
     let edges: usize = std::env::args().nth(2).unwrap().parse().unwrap();
 
-    timely::execute_from_args(std::env::args().skip(3), move |worker| {
-
+    let setup = move |worker: &mut Root<Allocator>| {
         let index = worker.index();
         let peers = worker.peers();
 
@@ -137,5 +146,11 @@ fn main() {
             .concat(&(0..1).map(|x| (x,x)).to_stream(scope))
             .connect_loop(handle);
         });
-    }).unwrap(); // asserts error-free execution;
+    };
+
+    #[cfg(feature = "sleeping")]
+    sleep::Communication::execute_from_args(std::env::args().skip(3), move |worker, _| { setup(worker) }).unwrap();
+
+    #[cfg(not(feature = "sleeping"))]
+    timely::execute_from_args(std::env::args().skip(3), setup).unwrap(); // asserts error-free execution;
 }

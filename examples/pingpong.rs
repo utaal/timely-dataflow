@@ -2,8 +2,17 @@
 
 extern crate timely;
 extern crate test;
+extern crate timely_communication;
 
 use timely::dataflow::operators::*;
+
+use timely_communication::Allocator;
+use timely::dataflow::scopes::Root;
+
+#[cfg(feature = "sleeping")]
+use timely::sleep;
+#[cfg(feature = "sleeping")]
+use timely::sleep::Runner;
 
 fn main() {
 
@@ -11,7 +20,7 @@ fn main() {
     let busy_loop = std::env::args().nth(2).unwrap().parse::<bool>().unwrap();
 
     // initializes and runs a timely dataflow
-    timely::execute_from_args(std::env::args().skip(3), move |worker| {
+    let setup = move |worker: &mut Root<Allocator>| {
         let index = worker.index();
         worker.dataflow(move |scope| {
             let (helper, cycle) = scope.loop_variable(iterations, 1);
@@ -30,5 +39,11 @@ fn main() {
                   })
                   .connect_loop(helper);
         });
-    }).unwrap();
+    };
+
+    #[cfg(feature = "sleeping")]
+    sleep::Communication::execute_from_args(std::env::args().skip(3), move |worker, _| { setup(worker) }).unwrap();
+
+    #[cfg(not(feature = "sleeping"))]
+    timely::execute_from_args(std::env::args().skip(3), setup).unwrap();
 }
