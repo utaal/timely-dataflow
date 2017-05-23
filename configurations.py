@@ -1,9 +1,12 @@
 features = [('spinning', ''), ('sleeping', '--features sleeping')]
-example = [('pingpong', '--example pingpong'), ('bfs', '--example bfs')]
-experiment = [('blackbox', '100 true'), ('pingpong', '1000000 false')]
+experiment = [
+        ('pingpong blackbox', '--example pingpong', '100 true'),
+        ('pingpong', '--example pingpong', '1000000 false'),
+        ('bfs', '--example bfs', '10000000 10000000'),
+]
 
 configurations = [
-        (f, e, ex) for f in features for e in experiment for ex in example]
+        (f, e) for f in features for e in experiment]
 
-for (fn, f), (fe, e), (fex, ex) in configurations:
-    print fn, ',', fe, ',', fex, ',', '--release', f, ex, ',', '--', e, '-w 4'
+for (fn, f), (fe, ex, e) in configurations:
+    print fn, ',', fe, ',', ex, '--release', f, ',', '--', e, '-w 4'
