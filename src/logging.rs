@@ -263,7 +263,7 @@ pub fn blackhole() -> Logging {
 }
 
 /// TODO(andreal)
-pub fn to_tcp_socket() -> Logging {
+pub fn to_tcp_socket() -> (Logging, ::std::thread::JoinHandle<()>) {
     ::timely_logging::initialize_precise_time_ns();
     let target: String = ::std::env::var("TIMELY_LOG_TARGET").expect("no $TIMELY_LOG_TARGET, e.g. 127.0.0.1:34254");
     let comm_target = ::std::env::var("TIMELY_COMM_LOG_TARGET").expect("no $TIMELY_COMM_LOG_TARGET, e.g. 127.0.0.1:34254");
@@ -272,7 +272,7 @@ pub fn to_tcp_socket() -> Logging {
     // comms
     let comm_writer = BufWriter::with_capacity(4096,
         TcpStream::connect(comm_target).expect("failed to connect to logging destination"));
-    /* thread is detached */ ::std::thread::spawn(move || {
+    let thread_handle = ::std::thread::spawn(move || {
         let mut writer = EventStreamWriter::new(EventWriter::new(comm_writer));
         let mut cur_time = timely_logging::get_precise_time_ns();
         writer.advance_by(RootTimestamp::new(cur_time));
@@ -295,7 +295,7 @@ pub fn to_tcp_socket() -> Logging {
         }
     });
 
-    Logging::new(
+    (Logging::new(
         Some(comms_snd),
         Box::new(move || {
             // timely
@@ -306,7 +306,7 @@ pub fn to_tcp_socket() -> Logging {
             LOG_EVENT_STREAM.with(|x| {
                 x.borrow_mut().writer = Some(Box::new(timely_writer));
             });
-        }))
+        })), thread_handle)
 }
 
 thread_local!{
