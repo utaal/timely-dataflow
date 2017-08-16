@@ -296,8 +296,10 @@ pub fn to_tcp_socket() -> (Logging, LogHandle) {
         writer.advance_by(RootTimestamp::new(cur_time));
 
         let mut receiver = comms_rcv;
+        let mut new_time = cur_time;
         while !*stop_clone.read().unwrap() {
-            let mut new_time = timely_logging::get_precise_time_ns();
+            let update_time = new_time;
+            new_time = timely_logging::get_precise_time_ns();
             while let Some((ts, setup, event)) = match receiver.try_recv() {
                 Ok(msg) => {
                     Some(msg)
@@ -308,8 +310,8 @@ pub fn to_tcp_socket() -> (Logging, LogHandle) {
                 writer.send((ts, setup, event));
             }
             writer.flush();
-            writer.advance_by(RootTimestamp::new(new_time));
-            cur_time = new_time;
+            writer.advance_by(RootTimestamp::new(update_time));
+            cur_time = update_time;
         }
     });
 
