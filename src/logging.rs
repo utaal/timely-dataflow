@@ -5,6 +5,7 @@ use std::cell::RefCell;
 use std::io::Write;
 use std::fs::File;
 use std::rc::Rc;
+use std::sync::{Arc, RwLock};
 
 use ::Data;
 
@@ -263,12 +264,29 @@ pub fn blackhole() -> Logging {
 }
 
 /// TODO(andreal)
-pub fn to_tcp_socket() -> (Logging, ::std::thread::JoinHandle<()>) {
+pub struct LogHandle {
+    handle: ::std::thread::JoinHandle<()>,
+    stop: Arc<RwLock<bool>>,
+}
+
+impl LogHandle {
+    /// TODO(andreal)
+    pub fn join(self) {
+        *self.stop.write().unwrap() = true;
+        self.handle.join().unwrap();
+    }
+}
+
+/// TODO(andreal)
+pub fn to_tcp_socket() -> (Logging, LogHandle) {
     ::timely_logging::initialize_precise_time_ns();
     let target: String = ::std::env::var("TIMELY_LOG_TARGET").expect("no $TIMELY_LOG_TARGET, e.g. 127.0.0.1:34254");
     let comm_target = ::std::env::var("TIMELY_COMM_LOG_TARGET").expect("no $TIMELY_COMM_LOG_TARGET, e.g. 127.0.0.1:34254");
     let (comms_snd, comms_rcv) = ::std::sync::mpsc::channel();
 
+    let stop = Arc::new(RwLock::new(false));
+
+    let stop_clone = stop.clone();
     // comms
     let comm_writer = BufWriter::with_capacity(4096,
         TcpStream::connect(comm_target).expect("failed to connect to logging destination"));
@@ -278,7 +296,7 @@ pub fn to_tcp_socket() -> (Logging, ::std::thread::JoinHandle<()>) {
         writer.advance_by(RootTimestamp::new(cur_time));
 
         let mut receiver = comms_rcv;
-        loop {
+        while !*stop_clone.read().unwrap() {
             let mut new_time = timely_logging::get_precise_time_ns();
             while let Some((ts, setup, event)) = match receiver.try_recv() {
                 Ok(msg) => {
@@ -306,7 +324,11 @@ pub fn to_tcp_socket() -> (Logging, ::std::thread::JoinHandle<()>) {
             LOG_EVENT_STREAM.with(|x| {
                 x.borrow_mut().writer = Some(Box::new(timely_writer));
             });
-        })), thread_handle)
+        })),
+        LogHandle {
+            handle: thread_handle,
+            stop: stop,
+        })
 }
 
 thread_local!{
