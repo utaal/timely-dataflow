@@ -292,14 +292,13 @@ pub fn to_tcp_socket() -> (Logging, LogHandle) {
         TcpStream::connect(comm_target).expect("failed to connect to logging destination"));
     let thread_handle = ::std::thread::spawn(move || {
         let mut writer = EventStreamWriter::new(EventWriter::new(comm_writer));
-        let mut cur_time = timely_logging::get_precise_time_ns();
+        let mut cur_time = timely_logging::get_precise_time_ns() - 1_000_000;
         writer.advance_by(RootTimestamp::new(cur_time));
 
         let mut receiver = comms_rcv;
-        let mut new_time = cur_time;
+        eprintln!("hack");
         while !*stop_clone.read().unwrap() {
-            let update_time = new_time;
-            new_time = timely_logging::get_precise_time_ns();
+            let new_time = timely_logging::get_precise_time_ns() - 1_000_000;
             while let Some((ts, setup, event)) = match receiver.try_recv() {
                 Ok(msg) => {
                     Some(msg)
@@ -310,8 +309,8 @@ pub fn to_tcp_socket() -> (Logging, LogHandle) {
                 writer.send((ts, setup, event));
             }
             writer.flush();
-            writer.advance_by(RootTimestamp::new(update_time));
-            cur_time = update_time;
+            writer.advance_by(RootTimestamp::new(new_time));
+            cur_time = new_time;
         }
     });
 
