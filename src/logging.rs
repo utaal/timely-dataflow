@@ -191,6 +191,7 @@ impl<T: Timestamp, V: Clone, P: EventPusher<T, V>> Drop for EventStreamWriter<T,
             self.buffer.clear();
         }
         self.pusher.push(Event::Progress(vec![(self.cur_time.clone(), -1)]));
+        eprintln!("dropped: {:?}", self.cur_time);
     }
 }
 
