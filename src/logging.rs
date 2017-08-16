@@ -138,6 +138,7 @@ impl<S: Copy, E: Clone> LogEventStream<S, E> {
 
 trait EventStreamInput<T: Timestamp, V: Clone> {
     fn send(&mut self, value: V);
+    fn size(&self) -> usize;
     fn flush(&mut self);
     fn advance_by(&mut self, timestamp: T);
     fn clear(&mut self);
@@ -168,6 +169,9 @@ impl<T: Timestamp, V: Clone, P: EventPusher<T, V>> EventStreamWriter<T, V, P> {
 impl<T: Timestamp, V: Clone, P: EventPusher<T, V>> EventStreamInput<T, V> for EventStreamWriter<T, V, P> {
     fn send(&mut self, value: V) {
         self.buffer.push(value);
+    }
+    fn size(&self) -> usize {
+        self.buffer.len()
     }
     fn flush(&mut self) {
         if self.buffer.len() > 0 {
@@ -297,8 +301,8 @@ pub fn to_tcp_socket() -> (Logging, LogHandle) {
 
         let mut receiver = comms_rcv;
         eprintln!("hack");
+        let mut new_time = cur_time;
         while !*stop_clone.read().unwrap() {
-            let new_time = timely_logging::get_precise_time_ns() - 1_000_000;
             while let Some((ts, setup, event)) = match receiver.try_recv() {
                 Ok(msg) => {
                     Some(msg)
@@ -308,9 +312,13 @@ pub fn to_tcp_socket() -> (Logging, LogHandle) {
             } {
                 writer.send((ts, setup, event));
             }
-            writer.flush();
-            writer.advance_by(RootTimestamp::new(new_time));
-            cur_time = new_time;
+            if writer.size() >= 1024 || timely_logging::get_precise_time_ns() - cur_time > 1_000_000_000 {
+                eprint!("f");
+                writer.flush();
+                writer.advance_by(RootTimestamp::new(new_time));
+                cur_time = new_time;
+                new_time = timely_logging::get_precise_time_ns() - 1_000_000;
+            }
         }
     });
 
