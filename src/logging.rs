@@ -313,11 +313,11 @@ pub fn to_tcp_socket() -> (Logging, LogHandle) {
                 writer.send((ts, setup, event));
             }
             if writer.size() >= 1024 || timely_logging::get_precise_time_ns() - cur_time > 1_000_000_000 {
-                eprint!("f");
+                let next_new_time = timely_logging::get_precise_time_ns() - 1_000_000;
                 writer.flush();
                 writer.advance_by(RootTimestamp::new(new_time));
                 cur_time = new_time;
-                new_time = timely_logging::get_precise_time_ns() - 1_000_000;
+                new_time = next_new_time;
             }
         }
     });
