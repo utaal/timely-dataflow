@@ -128,6 +128,10 @@ impl<A: Allocate> ScopeParent for Root<A> {
         *self.identifiers.borrow_mut() += 1;
         *self.identifiers.borrow() - 1
     }
+
+    fn logging(&self) -> Rc<EventPusher<u64, ::timely_logging::Event>> {
+        self.logging.clone()
+    }
 }
 
 impl<A: Allocate> Allocate for Root<A> {
