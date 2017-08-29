@@ -6,6 +6,7 @@ use std::any::Any;
 
 use progress::timestamp::RootTimestamp;
 use progress::{Timestamp, Operate, SubgraphBuilder};
+use dataflow::operators::capture::EventPusher;
 use timely_communication::{Allocate, Data};
 use {Push, Pull};
 
@@ -18,16 +19,18 @@ pub struct Root<A: Allocate> {
     identifiers: Rc<RefCell<usize>>,
     dataflows: Rc<RefCell<Vec<Wrapper>>>,
     dataflow_counter: Rc<RefCell<usize>>,
+    logging: Rc<EventPusher<u64, ::timely_logging::Event>>,
 }
 
 impl<A: Allocate> Root<A> {
     /// Allocates a new `Root` bound to a channel allocator.
-    pub fn new(c: A) -> Root<A> {
+    pub fn new(c: A, logging: Rc<EventPusher<u64, ::timely_logging::Event>>) -> Root<A> {
         let mut result = Root {
             allocator: Rc::new(RefCell::new(c)),
             identifiers: Rc::new(RefCell::new(0)),
             dataflows: Rc::new(RefCell::new(Vec::new())),
             dataflow_counter: Rc::new(RefCell::new(0)),
+            logging: logging,
         };
 
         // LOGGING
@@ -142,6 +145,7 @@ impl<A: Allocate> Clone for Root<A> {
             identifiers: self.identifiers.clone(),
             dataflows: self.dataflows.clone(),
             dataflow_counter: self.dataflow_counter.clone(),
+            logging: self.logging.clone(),
         }
     }
 }

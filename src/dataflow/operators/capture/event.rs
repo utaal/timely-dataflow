@@ -63,6 +63,15 @@ impl<T, D> EventPusher<T, D> for ::std::sync::mpsc::Sender<Event<T, D>> {
     }
 }
 
+/// TODO(andreal)
+pub struct BlackholeEventPusher { }
+
+impl<T, D> EventPusher<T, D> for BlackholeEventPusher {
+    fn push(&self, event: Event<T, D>) {
+        // no-op
+    }
+}
+
 /// A linked-list event pusher and iterator.
 pub mod link {
 
