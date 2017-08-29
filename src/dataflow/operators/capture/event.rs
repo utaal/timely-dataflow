@@ -52,13 +52,13 @@ pub trait EventIterator<T, D> {
 /// Receives `Event<T, D>` events.
 pub trait EventPusher<T, D> {
     /// Provides a new `Event<T, D>` to the pusher.
-    fn push(&mut self, event: Event<T, D>);
+    fn push(&self, event: Event<T, D>);
 }
 
 
 // implementation for the linked list behind a `Handle`.
 impl<T, D> EventPusher<T, D> for ::std::sync::mpsc::Sender<Event<T, D>> {
-    fn push(&mut self, event: Event<T, D>) {
+    fn push(&self, event: Event<T, D>) {
         self.send(event).unwrap();
     }
 }
@@ -90,11 +90,12 @@ pub mod link {
     }
 
     // implementation for the linked list behind a `Handle`.
-    impl<T, D> EventPusher<T, D> for Rc<EventLink<T, D>> {
-        fn push(&mut self, event: Event<T, D>) {
-            *self.next.borrow_mut() = Some(Rc::new(EventLink { event: event, next: RefCell::new(None) }));
-            let next = self.next.borrow().as_ref().unwrap().clone();
-            *self = next;
+    impl<T, D> EventPusher<T, D> for RefCell<Rc<EventLink<T, D>>> {
+        fn push(&self, event: Event<T, D>) {
+            let mut this = self.borrow_mut();
+            *this.next.borrow_mut() = Some(Rc::new(EventLink { event: event, next: RefCell::new(None) }));
+            let next = this.next.borrow().as_ref().unwrap().clone();
+            *this = next;
         }
     }
 
@@ -116,14 +117,15 @@ pub mod link {
 /// A binary event pusher and iterator.
 pub mod binary {
 
+    use std::cell::RefCell;
     use std::io::Write;
     use abomonation::Abomonation;
     use super::{Event, EventPusher, EventIterator};
 
     /// A wrapper for `W: Write` implementing `EventPusher<T, D>`.
     pub struct EventWriter<T, D, W: ::std::io::Write> {
-        buffer: Vec<u8>,
-        stream: W,
+        buffer: RefCell<Vec<u8>>,
+        stream: RefCell<W>,
         phant: ::std::marker::PhantomData<(T,D)>,
     }
 
@@ -131,18 +133,18 @@ pub mod binary {
         /// Allocates a new `EventWriter` wrapping a supplied writer.
         pub fn new(w: W) -> EventWriter<T, D, W> {
             EventWriter {
-                buffer: vec![],
-                stream: w,
+                buffer: RefCell::new(vec![]),
+                stream: RefCell::new(w),
                 phant: ::std::marker::PhantomData,
             }
         }
     }
 
     impl<T: Abomonation, D: Abomonation, W: ::std::io::Write> EventPusher<T, D> for EventWriter<T, D, W> {
-        fn push(&mut self, event: Event<T, D>) {
-            unsafe { ::abomonation::encode(&event, &mut self.buffer); }
-            self.stream.write_all(&self.buffer[..]).unwrap();
-            self.buffer.clear();
+        fn push(&self, event: Event<T, D>) {
+            unsafe { ::abomonation::encode(&event, &mut self.buffer.borrow_mut()); }
+            self.stream.borrow_mut().write_all(&self.buffer.borrow()[..]).unwrap();
+            self.buffer.borrow_mut().clear();
         }
     }
 
