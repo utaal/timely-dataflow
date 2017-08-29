@@ -85,7 +85,7 @@ use abomonation::{Abomonation, encode, decode};
 pub use allocator::Generic as Allocator;
 pub use allocator::Allocate;
 pub use initialize::{initialize, Configuration, WorkerGuards};
-pub use logging::Logging;
+pub use logging::LogSender;
 
 /// A composite trait for types that may be used with channels.
 pub trait Data : Send+Any+Serialize+Clone+'static { }

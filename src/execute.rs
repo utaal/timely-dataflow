@@ -1,7 +1,7 @@
 //! Starts a timely dataflow execution from configuration information and per-worker logic.
 
 use std::rc::Rc;
-use timely_communication::{initialize, Configuration, Allocator, WorkerGuards, Logging};
+use timely_communication::{initialize, Configuration, Allocator, WorkerGuards};
 use dataflow::operators::capture::event::BlackholeEventPusher;
 use dataflow::scopes::{Root, Child};
 
@@ -118,12 +118,12 @@ where T: Send+'static,
 pub fn execute<T, F>(config: Configuration, func: F) -> Result<WorkerGuards<T>,String> 
 where T:Send+'static,
       F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static {
-    let logging_config = ::logging::blackhole();
-    execute_logging(config, logging_config, func)
+    // let logging_config = ::logging::blackhole();
+    execute_logging(config, func)
 }
 
 /// TODO(andreal)
-pub fn execute_logging<T, F>(config: Configuration, logging_config: Logging, func: F) -> Result<WorkerGuards<T>,String> 
+pub fn execute_logging<T, F>(config: Configuration, func: F) -> Result<WorkerGuards<T>,String> 
 where T:Send+'static,
       F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static {
     initialize(config, move |allocator| {
@@ -131,7 +131,7 @@ where T:Send+'static,
         let result = func(&mut root);
         while root.step() { }
         result
-    }, logging_config)
+    }, unimplemented!())
 }
 
 /// Executes a timely dataflow from supplied arguments and per-communicator logic.
@@ -185,14 +185,14 @@ pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,St
     where I: Iterator<Item=String>, 
           T:Send+'static,
           F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static, {
-    let logging_config = ::logging::blackhole();
-    execute_from_args_logging(iter, logging_config, func)
+    // let logging_config = ::logging::blackhole();
+    execute_from_args_logging(iter, func)
 }
 
 /// TODO(andreal)
-pub fn execute_from_args_logging<I, T, F>(iter: I, logging_config: Logging, func: F) -> Result<WorkerGuards<T>,String> 
+pub fn execute_from_args_logging<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,String> 
     where I: Iterator<Item=String>, 
           T:Send+'static,
           F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static, {
-    execute_logging(try!(Configuration::from_args(iter)), logging_config, func)
+    execute_logging(try!(Configuration::from_args(iter)), func)
 }

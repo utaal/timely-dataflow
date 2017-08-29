@@ -30,8 +30,6 @@ use timely_logging::Event as LogEvent;
 use timely_logging::EventsSetup;
 use timely_logging::{CommEvent, CommsSetup};
 
-use timely_communication::Logging;
-
 pub use timely_logging::OperatesEvent;
 pub use timely_logging::ChannelsEvent;
 pub use timely_logging::ProgressEvent;
@@ -255,90 +253,6 @@ impl<T: Timestamp, V: Clone, P: EventPusher<T, V>> Drop for EventStreamWriter<T,
 //     // }
 // 
 // }
-
-/// TODO(andreal)
-pub fn blackhole() -> Logging {
-    Logging::new(
-        None,
-        Box::new(move || {
-            LOG_EVENT_STREAM.with(|x| {
-                x.borrow_mut().writer = None;
-            });
-        }))
-}
-
-/// TODO(andreal)
-pub struct LogHandle {
-    handle: ::std::thread::JoinHandle<()>,
-    stop: Arc<RwLock<bool>>,
-}
-
-impl LogHandle {
-    /// TODO(andreal)
-    pub fn join(self) {
-        *self.stop.write().unwrap() = true;
-        self.handle.join().unwrap();
-    }
-}
-
-/// TODO(andreal)
-pub fn to_tcp_socket() -> (Logging, LogHandle) {
-    ::timely_logging::initialize_precise_time_ns();
-    let target: String = ::std::env::var("TIMELY_LOG_TARGET").expect("no $TIMELY_LOG_TARGET, e.g. 127.0.0.1:34254");
-    let comm_target = ::std::env::var("TIMELY_COMM_LOG_TARGET").expect("no $TIMELY_COMM_LOG_TARGET, e.g. 127.0.0.1:34254");
-    let (comms_snd, comms_rcv) = ::std::sync::mpsc::channel();
-
-    let stop = Arc::new(RwLock::new(false));
-
-    let stop_clone = stop.clone();
-    // comms
-    let comm_writer = BufWriter::with_capacity(4096,
-        TcpStream::connect(comm_target).expect("failed to connect to logging destination"));
-    let thread_handle = ::std::thread::spawn(move || {
-        let mut writer = EventStreamWriter::new(EventWriter::new(comm_writer));
-        let mut cur_time = timely_logging::get_precise_time_ns() - 1_000_000;
-        writer.advance_by(RootTimestamp::new(cur_time));
-
-        let mut receiver = comms_rcv;
-        eprintln!("hack");
-        let mut new_time = cur_time;
-        while !*stop_clone.read().unwrap() {
-            while let Some((ts, setup, event)) = match receiver.try_recv() {
-                Ok(msg) => {
-                    Some(msg)
-                },
-                Err(::std::sync::mpsc::TryRecvError::Empty) => None,
-                Err(::std::sync::mpsc::TryRecvError::Disconnected) => return,
-            } {
-                writer.send((ts, setup, event));
-            }
-            if writer.size() >= 1024 || timely_logging::get_precise_time_ns() - cur_time > 1_000_000_000 {
-                let next_new_time = timely_logging::get_precise_time_ns() - 1_000_000;
-                writer.flush();
-                writer.advance_by(RootTimestamp::new(new_time));
-                cur_time = new_time;
-                new_time = next_new_time;
-            }
-        }
-    });
-
-    (Logging::new(
-        Some(comms_snd),
-        Box::new(move || {
-            // timely
-            let socket = BufWriter::with_capacity(4096,
-                TcpStream::connect(&target).expect("failed to connect to logging destination"));
-            let mut timely_writer = EventStreamWriter::new(EventWriter::new(socket));
-            timely_writer.advance_by(RootTimestamp::new(timely_logging::get_precise_time_ns()));
-            LOG_EVENT_STREAM.with(|x| {
-                x.borrow_mut().writer = Some(Box::new(timely_writer));
-            });
-        })),
-        LogHandle {
-            handle: thread_handle,
-            stop: stop,
-        })
-}
 
 thread_local!{
     /// TODO(andreal)
