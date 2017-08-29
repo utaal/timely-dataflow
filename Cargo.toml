@@ -30,7 +30,7 @@ timely_logging = { path = "logging/" }
 [dev-dependencies]
 getopts="0.2.14"
 rand="0.3.13"
-skeptic = "0.12"
+#skeptic = "0.12"
 
-[build-dependencies]
-skeptic = "0.12"
+#[build-dependencies]
+#skeptic = "0.12"
