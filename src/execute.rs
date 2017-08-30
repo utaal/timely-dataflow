@@ -2,7 +2,6 @@
 
 use std::rc::Rc;
 use timely_communication::{initialize, Configuration, Allocator, WorkerGuards};
-use dataflow::operators::capture::event::BlackholeEventPusher;
 use dataflow::scopes::{Root, Child};
 
 /// Executes a single-threaded timely dataflow computation.
@@ -53,7 +52,7 @@ where T: Send+'static,
       F: Fn(&mut Child<Root<Allocator>,u64>)->T+Send+Sync+'static {
     // let (log, comms_snd) = Logging::new();
     let guards = initialize(Configuration::Thread, move |allocator| {
-        let mut root = Root::new(allocator, Rc::new(BlackholeEventPusher { }));
+        let mut root = Root::new(allocator, Rc::new(|_| {}));
         let result = root.dataflow(|x| func(x));
         while root.step() { }
         result
@@ -127,7 +126,7 @@ pub fn execute_logging<T, F>(config: Configuration, func: F) -> Result<WorkerGua
 where T:Send+'static,
       F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static {
     initialize(config, move |allocator| {
-        let mut root = Root::new(allocator, Rc::new(BlackholeEventPusher { }));
+        let mut root = Root::new(allocator, Rc::new(|_| {}));
         let result = func(&mut root);
         while root.step() { }
         result

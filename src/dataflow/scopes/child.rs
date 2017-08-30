@@ -6,9 +6,9 @@ use std::rc::Rc;
 use progress::{Timestamp, Operate, SubgraphBuilder};
 use progress::nested::{Source, Target};
 use progress::nested::product::Product;
-use dataflow::operators::capture::event::EventPusher;
 use timely_communication::{Allocate, Data};
 use {Push, Pull};
+use logging::Logger;
 
 use super::{ScopeParent, Scope};
 
@@ -38,7 +38,7 @@ impl<'a, G: ScopeParent, T: Timestamp> ScopeParent for Child<'a, G, T> {
     }
 
     #[inline]
-    fn logging(&self) -> Rc<EventPusher<u64, ::timely_logging::Event>> {
+    fn logging(&self) -> Logger {
         self.parent.logging()
     }
 }
@@ -70,7 +70,7 @@ impl<'a, G: ScopeParent, T: Timestamp> Scope for Child<'a, G, T> {
         let index = self.subgraph.borrow_mut().allocate_child_id();
         let path = self.subgraph.borrow().path.clone();
 
-        let subscope = RefCell::new(SubgraphBuilder::new_from(index, path));
+        let subscope = RefCell::new(SubgraphBuilder::new_from(index, path, self.logging().clone()));
         let result = {
             let mut builder = Child {
                 subgraph: &subscope,
@@ -83,11 +83,6 @@ impl<'a, G: ScopeParent, T: Timestamp> Scope for Child<'a, G, T> {
         self.add_operator_with_index(subscope, index);
 
         result
-    }
-
-    #[inline]
-    fn logging(&self) -> Rc<EventPusher<u64, ::timely_logging::Event>> {
-        self.parent.logging()
     }
 }
 

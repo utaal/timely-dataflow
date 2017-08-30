@@ -6,7 +6,7 @@ use std::any::Any;
 
 use progress::timestamp::RootTimestamp;
 use progress::{Timestamp, Operate, SubgraphBuilder};
-use dataflow::operators::capture::EventPusher;
+use logging::Logger;
 use timely_communication::{Allocate, Data};
 use {Push, Pull};
 
@@ -19,12 +19,12 @@ pub struct Root<A: Allocate> {
     identifiers: Rc<RefCell<usize>>,
     dataflows: Rc<RefCell<Vec<Wrapper>>>,
     dataflow_counter: Rc<RefCell<usize>>,
-    logging: Rc<EventPusher<u64, ::timely_logging::Event>>,
+    logging: Logger,
 }
 
 impl<A: Allocate> Root<A> {
     /// Allocates a new `Root` bound to a channel allocator.
-    pub fn new(c: A, logging: Rc<EventPusher<u64, ::timely_logging::Event>>) -> Root<A> {
+    pub fn new(c: A, logging: Logger) -> Root<A> {
         let mut result = Root {
             allocator: Rc::new(RefCell::new(c)),
             identifiers: Rc::new(RefCell::new(0)),
@@ -87,7 +87,7 @@ impl<A: Allocate> Root<A> {
 
         let addr = vec![self.allocator.borrow().index()];
         let dataflow_index = self.allocate_dataflow_index();
-        let subscope = SubgraphBuilder::new_from(dataflow_index, addr);
+        let subscope = SubgraphBuilder::new_from(dataflow_index, addr, self.logging.clone());
         let subscope = RefCell::new(subscope);
 
         let result = {
@@ -129,7 +129,7 @@ impl<A: Allocate> ScopeParent for Root<A> {
         *self.identifiers.borrow() - 1
     }
 
-    fn logging(&self) -> Rc<EventPusher<u64, ::timely_logging::Event>> {
+    fn logging(&self) -> Logger {
         self.logging.clone()
     }
 }

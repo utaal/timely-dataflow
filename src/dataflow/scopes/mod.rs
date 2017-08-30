@@ -2,7 +2,7 @@
 
 use progress::{Timestamp, Operate};
 use progress::nested::{Source, Target};
-use dataflow::operators::capture::event::EventPusher;
+use logging::Logger;
 use timely_communication::Allocate;
 
 use std::rc::Rc;
@@ -21,8 +21,8 @@ pub trait ScopeParent: Allocate+Clone {
     /// Allocates a new locally unique identifier.
     fn new_identifier(&mut self) -> usize;
 
-    /// Get logging EventPusher.
-    fn logging(&self) -> Rc<EventPusher<u64, ::timely_logging::Event>>;
+    /// TODO(andreal)
+    fn logging(&self) -> Logger;
 }
 
 /// The fundamental operations required to add and connect operators in a timely dataflow graph.
@@ -80,7 +80,4 @@ pub trait Scope: ScopeParent {
     /// });
     /// ```
     fn scoped<T: Timestamp, R, F:FnOnce(&mut Child<Self, T>)->R>(&mut self, func: F) -> R;
-
-    /// TODO(andreal)
-    fn logging(&self) -> Rc<EventPusher<u64, ::timely_logging::Event>>;
 }

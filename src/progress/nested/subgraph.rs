@@ -9,6 +9,8 @@ use timely_communication::Allocate;
 
 use order::PartialOrder;
 
+use logging::Logger;
+
 use progress::frontier::{MutableAntichain, Antichain};
 use progress::{Timestamp, PathSummary, Operate};
 
@@ -75,6 +77,9 @@ pub struct SubgraphBuilder<TOuter: Timestamp, TInner: Timestamp> {
 
     // expressed capabilities, used to filter changes against.
     output_capabilities: Vec<MutableAntichain<TOuter>>,
+
+    /// Logging handle
+    logging: Logger,
 
 }
 
@@ -515,7 +520,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
     }
 
     /// Creates a new Subgraph from a channel allocator and "descriptive" indices.
-    pub fn new_from(index: usize, mut path: Vec<usize>) -> SubgraphBuilder<TOuter, TInner> {
+    pub fn new_from(index: usize, mut path: Vec<usize>, logging: Logger) -> SubgraphBuilder<TOuter, TInner> {
         path.push(index);
 
         let children = vec![PerOperatorState::empty(path.clone())];
@@ -531,6 +536,8 @@ impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
 
             input_messages:         Default::default(),
             output_capabilities:    Default::default(),
+
+            logging:                logging,
         }
     }
 
@@ -542,6 +549,15 @@ impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
 
     /// Adds a new child to the subgraph.
     pub fn add_child(&mut self, child: Box<Operate<Product<TOuter, TInner>>>, index: usize, identifier: usize) {
+        {
+            let mut child_path = self.path.clone();
+            child_path.push(index);
+            (self.logging)(::timely_logging::Event::Operates(::timely_logging::OperatesEvent {
+                id: identifier,
+                addr: child_path,
+                name: child.name().to_owned(),
+            }));
+        }
         self.children.push(PerOperatorState::new(child, index, self.path.clone(), identifier))
     }
 
@@ -819,11 +835,6 @@ impl<T: Timestamp> PerOperatorState<T> {
 
     pub fn new(mut scope: Box<Operate<T>>, index: usize, mut path: Vec<usize>, identifier: usize) -> PerOperatorState<T> {
 
-        // LOGGING
-        path.push(index);
-
-        ::logging::log(&::logging::OPERATES, ::logging::OperatesEvent { id: identifier, addr: path.clone(), name: scope.name().to_owned() });
-
         let local = scope.local();
         let inputs = scope.inputs();
         let outputs = scope.outputs();
@@ -845,7 +856,6 @@ impl<T: Timestamp> PerOperatorState<T> {
 
         let mut result = PerOperatorState {
             name:       scope.name(),
-            // addr:       path,
             operator:      Some(scope),
             index:      index,
             id:         identifier,

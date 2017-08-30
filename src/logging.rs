@@ -42,6 +42,9 @@ pub use timely_logging::GuardedProgressEvent;
 pub use timely_logging::GuardedMessageEvent;
 pub use timely_logging::CommChannelsEvent;
 
+/// TODO(andreal)
+pub type Logger = Rc<Fn(::timely_logging::Event)->()>;
+
 /// Logs `record` in `logger` if logging is enabled.
 pub fn log<T: ::timely_logging::Logger>(logger: &'static ::std::thread::LocalKey<T>, record: T::Record) {
     if cfg!(feature = "logging") {
@@ -257,9 +260,6 @@ impl<T: Timestamp, V: Clone, P: EventPusher<T, V>> Drop for EventStreamWriter<T,
 thread_local!{
     /// TODO(andreal)
     static LOG_EVENT_STREAM: Rc<RefCell<LogEventStream<EventsSetup, LogEvent>>> = Rc::new(RefCell::new(LogEventStream::new()));
-    /// TODO(andreal)
-    /// Logs operator creation.
-    pub static OPERATES: TimelyLogger<OperatesEvent> = LOG_EVENT_STREAM.with(|x| TimelyLogger::new(x.clone()));
     /// Logs channel creation.
     pub static CHANNELS: TimelyLogger<ChannelsEvent> = LOG_EVENT_STREAM.with(|x| TimelyLogger::new(x.clone()));
     /// Logs progress transmission.
