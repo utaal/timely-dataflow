@@ -33,6 +33,23 @@ use timely_logging::{CommsEvent, CommsSetup};
 /// TODO(andreal)
 pub type Logger = Rc<Fn(::timely_logging::Event)->()>;
 
+/// TODO(andreal)
+pub struct LoggingConfig {
+    /// TODO(andreal)
+    pub timely_logging: Arc<Fn(EventsSetup)->Rc<Fn(LogEvent)->()>+Send+Sync>,
+    /// TODO(andreal)
+    pub communication_logging: Arc<Fn(CommsSetup)->Rc<Fn(CommsEvent)->()>+Send+Sync>,
+}
+
+impl Default for LoggingConfig {
+    fn default() -> Self {
+        LoggingConfig {
+            timely_logging: Arc::new(|_| Rc::new(|_| {})),
+            communication_logging: Arc::new(|_| Rc::new(|_| {})),
+        }
+    }
+}
+
 trait EventStreamInput<T: Timestamp, V: Clone> {
     fn send(&mut self, value: V);
     fn size(&self) -> usize;
