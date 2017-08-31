@@ -52,13 +52,14 @@ use logging::LoggingConfig;
 pub fn example<T, F>(func: F) -> T
 where T: Send+'static,
       F: Fn(&mut Child<Root<Allocator>,u64>)->T+Send+Sync+'static {
-    // let (log, comms_snd) = Logging::new();
+    let logging_config: LoggingConfig = Default::default();
+    let timely_logging = logging_config.timely_logging.clone();
     let guards = initialize(Configuration::Thread, move |allocator| {
-        let mut root = Root::new(allocator, Rc::new(|_| {}));
+        let mut root = Root::new(allocator, timely_logging.clone());
         let result = root.dataflow(|x| func(x));
         while root.step() { }
         result
-    }, Arc::new(|_| Rc::new(|_| {})));
+    }, logging_config.communication_logging);
 
     guards.unwrap() // assert the computation started correctly
           .join()   // wait for the worker to finish
@@ -130,9 +131,7 @@ where T:Send+'static,
     let timely_logging = logging_config.timely_logging.clone();
     initialize(config, move |allocator| {
         let index = allocator.index();
-        let mut root = Root::new(allocator, (timely_logging)(::timely_logging::EventsSetup {
-            index: index,
-        }));
+        let mut root = Root::new(allocator, timely_logging.clone());
         let result = func(&mut root);
         while root.step() { }
         result

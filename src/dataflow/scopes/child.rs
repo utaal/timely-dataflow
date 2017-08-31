@@ -19,6 +19,8 @@ pub struct Child<'a, G: ScopeParent, T: Timestamp> {
     pub subgraph: &'a RefCell<SubgraphBuilder<G::Timestamp, T>>,
     /// A copy of the child's parent scope.
     pub parent:   G,
+    /// TODO(andreal)
+    pub logging:  Logger,
 }
 
 impl<'a, G: ScopeParent, T: Timestamp> Child<'a, G, T> {
@@ -35,11 +37,6 @@ impl<'a, G: ScopeParent, T: Timestamp> ScopeParent for Child<'a, G, T> {
 
     fn new_identifier(&mut self) -> usize {
         self.parent.new_identifier()
-    }
-
-    #[inline]
-    fn logging(&self) -> Logger {
-        self.parent.logging()
     }
 }
 
@@ -75,6 +72,7 @@ impl<'a, G: ScopeParent, T: Timestamp> Scope for Child<'a, G, T> {
             let mut builder = Child {
                 subgraph: &subscope,
                 parent: self.clone(),
+                logging: self.logging.clone(),
             };
             func(&mut builder)
         };
@@ -83,6 +81,10 @@ impl<'a, G: ScopeParent, T: Timestamp> Scope for Child<'a, G, T> {
         self.add_operator_with_index(subscope, index);
 
         result
+    }
+
+    fn logging(&self) -> Logger {
+        self.logging.clone()
     }
 }
 
@@ -95,5 +97,5 @@ impl<'a, G: ScopeParent, T: Timestamp> Allocate for Child<'a, G, T> {
 }
 
 impl<'a, G: ScopeParent, T: Timestamp> Clone for Child<'a, G, T> {
-    fn clone(&self) -> Self { Child { subgraph: self.subgraph, parent: self.parent.clone() }}
+    fn clone(&self) -> Self { Child { subgraph: self.subgraph, parent: self.parent.clone(), logging: self.logging.clone() }}
 }

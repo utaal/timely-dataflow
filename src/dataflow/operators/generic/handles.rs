@@ -68,10 +68,10 @@ impl<'a, T: Timestamp, D, P: Pull<(T, Content<D>)>> InputHandle<T, D, P> {
     pub fn for_each<F: FnMut(Capability<T>, &mut Content<D>)>(&mut self, mut logic: F) {
         let logging = self.logging.clone();
         while let Some((cap, data)) = self.next() {
-            logging(::timely_logging::Event::GuardedMessage(
+            logging.log(::timely_logging::Event::GuardedMessage(
                     ::timely_logging::GuardedMessageEvent { is_start: true }));
             logic(cap, data);
-            logging(::timely_logging::Event::GuardedMessage(
+            logging.log(::timely_logging::Event::GuardedMessage(
                     ::timely_logging::GuardedMessageEvent { is_start: false }));
         }
     }

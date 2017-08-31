@@ -1,6 +1,7 @@
 //! The root scope of all timely dataflow computations.
 
 use std::rc::Rc;
+use std::sync::Arc;
 use std::cell::RefCell;
 use std::any::Any;
 
@@ -19,12 +20,12 @@ pub struct Root<A: Allocate> {
     identifiers: Rc<RefCell<usize>>,
     dataflows: Rc<RefCell<Vec<Wrapper>>>,
     dataflow_counter: Rc<RefCell<usize>>,
-    logging: Logger,
+    logging: Arc<Fn(::timely_logging::EventsSetup)->Logger+Sync+Send>,
 }
 
 impl<A: Allocate> Root<A> {
     /// Allocates a new `Root` bound to a channel allocator.
-    pub fn new(c: A, logging: Logger) -> Root<A> {
+    pub fn new(c: A, logging: Arc<Fn(::timely_logging::EventsSetup)->Logger+Sync+Send>) -> Root<A> {
         let mut result = Root {
             allocator: Rc::new(RefCell::new(c)),
             identifiers: Rc::new(RefCell::new(0)),
@@ -80,13 +81,17 @@ impl<A: Allocate> Root<A> {
 
         let addr = vec![self.allocator.borrow().index()];
         let dataflow_index = self.allocate_dataflow_index();
-        let subscope = SubgraphBuilder::new_from(dataflow_index, addr, self.logging.clone());
+        let logging = (self.logging)(::timely_logging::EventsSetup {
+            index: self.index(),
+        });
+        let subscope = SubgraphBuilder::new_from(dataflow_index, addr, logging.clone());
         let subscope = RefCell::new(subscope);
 
         let result = {
             let mut builder = Child {
                 subgraph: &subscope,
                 parent: self.clone(),
+                logging: logging,
             };
             func(&mut resources, &mut builder)
         };
@@ -120,10 +125,6 @@ impl<A: Allocate> ScopeParent for Root<A> {
     fn new_identifier(&mut self) -> usize {
         *self.identifiers.borrow_mut() += 1;
         *self.identifiers.borrow() - 1
-    }
-
-    fn logging(&self) -> Logger {
-        self.logging.clone()
     }
 }
 

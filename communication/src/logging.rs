@@ -9,5 +9,5 @@ use timely_logging::{Logger, CommsEvent, CommsSetup};
 pub use timely_logging::CommunicationEvent;
 pub use timely_logging::SerializationEvent;
 
-pub type LogSender = Rc<Fn(CommsEvent)->()>;
-
+/// TODO(andreal)
+pub type CommsLogger = Rc<::timely_logging::BufferingLogger<CommsEvent>>;

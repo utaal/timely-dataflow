@@ -26,26 +26,27 @@ use std::io::BufWriter;
 use std::net::TcpStream;
 
 use timely_logging;
+use timely_logging::BufferingLogger;
 use timely_logging::Event as LogEvent;
 use timely_logging::EventsSetup;
 use timely_logging::{CommsEvent, CommsSetup};
 
 /// TODO(andreal)
-pub type Logger = Rc<Fn(::timely_logging::Event)->()>;
+pub type Logger = Rc<BufferingLogger<LogEvent>>;
 
 /// TODO(andreal)
 pub struct LoggingConfig {
     /// TODO(andreal)
-    pub timely_logging: Arc<Fn(EventsSetup)->Rc<Fn(LogEvent)->()>+Send+Sync>,
+    pub timely_logging: Arc<Fn(EventsSetup)->Rc<BufferingLogger<LogEvent>>+Send+Sync>,
     /// TODO(andreal)
-    pub communication_logging: Arc<Fn(CommsSetup)->Rc<Fn(CommsEvent)->()>+Send+Sync>,
+    pub communication_logging: Arc<Fn(CommsSetup)->Rc<BufferingLogger<CommsEvent>>+Send+Sync>,
 }
 
 impl Default for LoggingConfig {
     fn default() -> Self {
         LoggingConfig {
-            timely_logging: Arc::new(|_| Rc::new(|_| {})),
-            communication_logging: Arc::new(|_| Rc::new(|_| {})),
+            timely_logging: Arc::new(|_| Rc::new(BufferingLogger::new())),
+            communication_logging: Arc::new(|_| Rc::new(BufferingLogger::new())),
         }
     }
 }
@@ -61,7 +62,7 @@ trait EventStreamInput<T: Timestamp, V: Clone> {
 /// Logs events to an underlying writer.
 pub struct EventStreamWriter<T: Timestamp, V: Clone, P: EventPusher<T, V>> {
     buffer: Vec<V>,
-    pusher: P, // RefCell<Option<Box<EventPusher<Product<RootTimestamp, u64>, (u64, S, E)>+Send>>>,
+    pusher: P,
     cur_time: T,
     _v: ::std::marker::PhantomData<V>,
 }
@@ -70,7 +71,6 @@ impl<T: Timestamp, V: Clone, P: EventPusher<T, V>> EventStreamWriter<T, V, P> {
     fn new(mut event_pusher: P) -> EventStreamWriter<T, V, P> {
         eprintln!("created");
         let cur_time: T = Default::default();
-        // event_pusher.push(Event::Progress(vec![(cur_time.clone(), 1)]));
         EventStreamWriter {
             buffer: Vec::new(),
             pusher: event_pusher,

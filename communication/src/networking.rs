@@ -81,7 +81,7 @@ struct BinaryReceiver<R: Read> {
     process:    usize, // process ID this receiver belongs to
     index:      usize, // receiver index
     threads:    usize,
-    log_sender:     ::logging::LogSender,
+    log_sender:     ::logging::CommsLogger,
 }
 
 impl<R: Read> BinaryReceiver<R> {
@@ -93,7 +93,7 @@ impl<R: Read> BinaryReceiver<R> {
             process: usize,
             index: usize,
             threads: usize,
-            log_sender: ::logging::LogSender) -> BinaryReceiver<R> {
+            log_sender: ::logging::CommsLogger) -> BinaryReceiver<R> {
         eprintln!("process {}, index {}, threads {}", process, index, threads);
         BinaryReceiver {
             reader:     reader,
@@ -123,7 +123,7 @@ impl<R: Read> BinaryReceiver<R> {
             let remaining = {
                 let mut slice = &self.buffer[..self.length];
                 while let Some(header) = MessageHeader::try_read(&mut slice) {
-                    (self.log_sender)(
+                    self.log_sender.log(
                         ::timely_logging::CommsEvent::Communication(::logging::CommunicationEvent {
                             is_send: false,
                             comm_channel: header.channel,
@@ -160,11 +160,11 @@ struct BinarySender<W: Write> {
     sources:    Receiver<(MessageHeader, Vec<u8>)>,
     process:    usize, // process ID this sender belongs to
     index:      usize, // sender index
-    log_sender:     ::logging::LogSender,
+    log_sender:     ::logging::CommsLogger,
 }
 
 impl<W: Write> BinarySender<W> {
-    fn new(writer: W, sources: Receiver<(MessageHeader, Vec<u8>)>, process: usize, index: usize, log_sender: ::logging::LogSender) -> BinarySender<W> {
+    fn new(writer: W, sources: Receiver<(MessageHeader, Vec<u8>)>, process: usize, index: usize, log_sender: ::logging::CommsLogger) -> BinarySender<W> {
         BinarySender {
             writer:     writer,
             sources:    sources,
@@ -189,7 +189,7 @@ impl<W: Write> BinarySender<W> {
 
             for (header, mut buffer) in stash.drain_temp() {
                 assert!(header.length == buffer.len());
-                (self.log_sender)(
+                self.log_sender.log(
                     ::timely_logging::CommsEvent::Communication(::logging::CommunicationEvent {
                         is_send: true,
                         comm_channel: header.channel,
@@ -241,7 +241,7 @@ impl<T:Send> Switchboard<T> {
 
 /// Initializes network connections
 pub fn initialize_networking(
-    addresses: Vec<String>, my_index: usize, threads: usize, noisy: bool, log_sender: Arc<Fn(::timely_logging::CommsSetup)->::logging::LogSender+Send+Sync>) -> Result<Vec<Binary>> {
+    addresses: Vec<String>, my_index: usize, threads: usize, noisy: bool, log_sender: Arc<Fn(::timely_logging::CommsSetup)->::logging::CommsLogger+Send+Sync>) -> Result<Vec<Binary>> {
 
     let processes = addresses.len();
     let hosts1 = Arc::new(addresses);

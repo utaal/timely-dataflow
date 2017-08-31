@@ -134,7 +134,7 @@ impl<T, D, P: Push<Message<T, D>>> Push<(T, Content<D>)> for Pusher<T, D, P> {
             self.pusher.push(&mut message);
             *pair = message.map(|x| (x.time, x.data));
 
-            (self.logging)(::timely_logging::Event::Messages(::timely_logging::MessagesEvent {
+            self.logging.log(::timely_logging::Event::Messages(::timely_logging::MessagesEvent {
                 is_send: true,
                 channel: self.channel,
                 comm_channel: self.comm_channel,
@@ -184,7 +184,7 @@ impl<T, D, P: Pull<Message<T, D>>> Pull<(T, Content<D>)> for Puller<T, D, P> {
 
         if let Some(ref message) = previous.as_ref() {
 
-            (self.logging)(::timely_logging::Event::Messages(::timely_logging::MessagesEvent {
+            self.logging.log(::timely_logging::Event::Messages(::timely_logging::MessagesEvent {
                 is_send: false,
                 channel: self.channel,
                 comm_channel: self.comm_channel,

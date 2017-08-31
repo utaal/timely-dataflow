@@ -32,7 +32,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
     /// Creates a new `Progcaster` using a channel from the supplied allocator.
     pub fn new<A: Allocate>(allocator: &mut A, path: &Vec<usize>, logging: Logger) -> Progcaster<T> {
         let (pushers, puller, chan) = allocator.allocate();
-        (logging)(::timely_logging::Event::CommChannels(::timely_logging::CommChannelsEvent {
+        logging.log(::timely_logging::Event::CommChannels(::timely_logging::CommChannelsEvent {
             comm_channel: chan,
             comm_channel_kind: ::timely_logging::CommChannelKind::Progress,
         }));
@@ -54,7 +54,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
     {
         if self.pushers.len() > 1 {  // if the length is one, just return the updates...
             if !messages.is_empty() || !internal.is_empty() {
-                (self.logging)(::timely_logging::Event::Progress(::timely_logging::ProgressEvent {
+                self.logging.log(::timely_logging::Event::Progress(::timely_logging::ProgressEvent {
                     is_send: true,
                     source: self.source,
                     comm_channel: self.comm_channel,
@@ -79,7 +79,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
             // TODO : Could take ownership, and recycle / reuse for next broadcast ...
             while let Some((ref source, ref counter, ref mut recv_messages, ref mut recv_internal)) = *self.puller.pull() {
 
-                (self.logging)(::timely_logging::Event::Progress(::timely_logging::ProgressEvent {
+                self.logging.log(::timely_logging::Event::Progress(::timely_logging::ProgressEvent {
                     is_send: false,
                     source: *source,
                     seq_no: *counter,

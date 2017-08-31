@@ -552,7 +552,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
         {
             let mut child_path = self.path.clone();
             child_path.push(index);
-            (self.logging)(::timely_logging::Event::Operates(::timely_logging::OperatesEvent {
+            self.logging.log(::timely_logging::Event::Operates(::timely_logging::OperatesEvent {
                 id: identifier,
                 addr: child_path,
                 name: child.name().to_owned(),
@@ -934,7 +934,7 @@ impl<T: Timestamp> PerOperatorState<T> {
         {
             let changes = &mut self.external_buffer;
             if changes.iter_mut().any(|ref mut c| !c.is_empty()) {
-                (self.logging)(::timely_logging::Event::PushProgress(::timely_logging::PushProgressEvent {
+                self.logging.log(::timely_logging::Event::PushProgress(::timely_logging::PushProgressEvent {
                     op_id: self.id,
                 }));
             }
@@ -951,7 +951,7 @@ impl<T: Timestamp> PerOperatorState<T> {
 
         let active = {
 
-            (self.logging)(::timely_logging::Event::Schedule(::timely_logging::ScheduleEvent {
+            self.logging.log(::timely_logging::Event::Schedule(::timely_logging::ScheduleEvent {
                 id: self.id, start_stop: ::timely_logging::StartStop::Start
             }));
 
@@ -976,7 +976,7 @@ impl<T: Timestamp> PerOperatorState<T> {
                 self.internal_buffer.iter_mut().any(|cm| !cm.is_empty()) ||
                 self.produced_buffer.iter_mut().any(|cm| !cm.is_empty());
 
-            (self.logging)(::timely_logging::Event::Schedule(::timely_logging::ScheduleEvent {
+            self.logging.log(::timely_logging::Event::Schedule(::timely_logging::ScheduleEvent {
                 id: self.id, start_stop: ::timely_logging::StartStop::Stop { activity: did_work }
             }));
 

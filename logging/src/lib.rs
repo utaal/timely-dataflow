@@ -322,3 +322,18 @@ impl From<InputEvent> for Event {
     fn from(v: InputEvent) -> Event { Event::Input(v) }
 }
 
+pub struct BufferingLogger<L> {
+    buffer: RefCell<Vec<L>>,
+}
+
+impl<L> BufferingLogger<L> {
+    pub fn new() -> Self {
+        BufferingLogger {
+            buffer: RefCell::new(Vec::with_capacity(1024)),
+        }
+    }
+
+    pub fn log(&self, l: L) {
+        self.buffer.borrow_mut().push(l);
+    }
+}
