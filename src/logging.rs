@@ -33,13 +33,6 @@ use timely_logging::{CommsEvent, CommsSetup};
 /// TODO(andreal)
 pub type Logger = Rc<Fn(::timely_logging::Event)->()>;
 
-/// Logs `record` in `logger` if logging is enabled.
-pub fn log<T: ::timely_logging::Logger>(logger: &'static ::std::thread::LocalKey<T>, record: T::Record) {
-    if cfg!(feature = "logging") {
-        logger.with(|x| x.log(record));
-    }
-}
-
 trait EventStreamInput<T: Timestamp, V: Clone> {
     fn send(&mut self, value: V);
     fn size(&self) -> usize;

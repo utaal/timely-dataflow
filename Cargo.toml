@@ -17,7 +17,6 @@ license = "MIT"
 
 [features]
 default=[]
-logging=["timely_communication/logging", "timely_logging/logging"]
 
 [dependencies]
 abomonation="0.4.5"

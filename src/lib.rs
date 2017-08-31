@@ -73,7 +73,6 @@ pub mod dataflow;
 pub mod execute;
 pub mod order;
 
-// #[cfg(feature = "logging")]
 pub mod logging;
 
 /// A composite trait for types usable as data in timely dataflow.

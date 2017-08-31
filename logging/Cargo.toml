@@ -5,8 +5,7 @@ version = "0.0.1"
 description = "Logging infrastructure for timely dataflow"
 
 [features]
-logging=[]
-default=[] # ["logging"]
+default=[]
 
 [dependencies]
 abomonation="0.4.4"

@@ -955,11 +955,11 @@ impl<T: Timestamp> PerOperatorState<T> {
                 id: self.id, start_stop: ::timely_logging::StartStop::Start
             }));
 
-            if cfg!(feature = "logging") {
-                assert!(self.consumed_buffer.iter_mut().all(|cm| cm.is_empty()));
-                assert!(self.internal_buffer.iter_mut().all(|cm| cm.is_empty()));
-                assert!(self.produced_buffer.iter_mut().all(|cm| cm.is_empty()));
-            }
+            // TODO(andreal) formerly behind "logging" feature flag {
+            //     assert!(self.consumed_buffer.iter_mut().all(|cm| cm.is_empty()));
+            //     assert!(self.internal_buffer.iter_mut().all(|cm| cm.is_empty()));
+            //     assert!(self.produced_buffer.iter_mut().all(|cm| cm.is_empty()));
+            // }
 
             let result = if let Some(ref mut operator) = self.operator {
                 operator.pull_internal_progress(
@@ -970,17 +970,15 @@ impl<T: Timestamp> PerOperatorState<T> {
             }
             else { false };
 
-            if cfg!(feature = "logging") {
+            // TODO(andreal): for logging, do we want this always enabled?
+            let did_work = 
+                self.consumed_buffer.iter_mut().any(|cm| !cm.is_empty()) ||
+                self.internal_buffer.iter_mut().any(|cm| !cm.is_empty()) ||
+                self.produced_buffer.iter_mut().any(|cm| !cm.is_empty());
 
-                let did_work = 
-                    self.consumed_buffer.iter_mut().any(|cm| !cm.is_empty()) ||
-                    self.internal_buffer.iter_mut().any(|cm| !cm.is_empty()) ||
-                    self.produced_buffer.iter_mut().any(|cm| !cm.is_empty());
-
-                (self.logging)(::timely_logging::Event::Schedule(::timely_logging::ScheduleEvent {
-                    id: self.id, start_stop: ::timely_logging::StartStop::Stop { activity: did_work }
-                }));
-            }
+            (self.logging)(::timely_logging::Event::Schedule(::timely_logging::ScheduleEvent {
+                id: self.id, start_stop: ::timely_logging::StartStop::Stop { activity: did_work }
+            }));
 
             result
         };
