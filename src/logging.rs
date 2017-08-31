@@ -35,16 +35,16 @@ use timely_logging::{CommsEvent, CommsSetup};
 pub type Logger = Rc<BufferingLogger<LogEvent>>;
 
 /// TODO(andreal)
-pub struct LoggingConfig {
+pub struct LogManager {
     /// TODO(andreal)
     pub timely_logging: Arc<Fn(EventsSetup)->Rc<BufferingLogger<LogEvent>>+Send+Sync>,
     /// TODO(andreal)
     pub communication_logging: Arc<Fn(CommsSetup)->Rc<BufferingLogger<CommsEvent>>+Send+Sync>,
 }
 
-impl Default for LoggingConfig {
+impl Default for LogManager {
     fn default() -> Self {
-        LoggingConfig {
+        LogManager {
             timely_logging: Arc::new(|_| Rc::new(BufferingLogger::new())),
             communication_logging: Arc::new(|_| Rc::new(BufferingLogger::new())),
         }
