@@ -6,6 +6,7 @@ extern crate time;
 
 use abomonation::Abomonation;
 
+use std::rc::Rc;
 use std::cell::RefCell;
 use std::io::Write;
 use std::io::Read;
@@ -210,14 +211,14 @@ pub struct GuardedProgressEvent {
 
 unsafe_abomonate!(GuardedProgressEvent : is_start);
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct EventsSetup {
     pub index: usize,
 }
 
 unsafe_abomonate!(EventsSetup : index);
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct CommsSetup {
     pub sender: bool,
     pub process: usize,
@@ -324,12 +325,14 @@ impl From<InputEvent> for Event {
 
 pub struct BufferingLogger<L> {
     buffer: RefCell<Vec<L>>,
+    pushers: Box<FnMut(&Vec<L>)->()>,
 }
 
 impl<L> BufferingLogger<L> {
-    pub fn new() -> Self {
+    pub fn new(pushers: Box<FnMut(&Vec<L>)->()>) -> Self {
         BufferingLogger {
             buffer: RefCell::new(Vec::with_capacity(1024)),
+            pushers: pushers,
         }
     }
 

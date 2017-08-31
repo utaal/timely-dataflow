@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use timely_communication::{initialize, Configuration, Allocator, WorkerGuards};
 use dataflow::scopes::{Root, Child};
-use logging::LogManager;
+use logging::LoggerConfig;
 
 /// Executes a single-threaded timely dataflow computation.
 ///
@@ -52,7 +52,7 @@ use logging::LogManager;
 pub fn example<T, F>(func: F) -> T
 where T: Send+'static,
       F: Fn(&mut Child<Root<Allocator>,u64>)->T+Send+Sync+'static {
-    let logging_config: LogManager = Default::default();
+    let logging_config: LoggerConfig = Default::default();
     let timely_logging = logging_config.timely_logging.clone();
     let guards = initialize(Configuration::Thread, move |allocator| {
         let mut root = Root::new(allocator, timely_logging.clone());
@@ -125,7 +125,7 @@ where T:Send+'static,
 }
 
 /// TODO(andreal)
-pub fn execute_logging<T, F>(config: Configuration, logging_config: LogManager, func: F) -> Result<WorkerGuards<T>,String> 
+pub fn execute_logging<T, F>(config: Configuration, logging_config: LoggerConfig, func: F) -> Result<WorkerGuards<T>,String> 
 where T:Send+'static,
       F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static {
     let timely_logging = logging_config.timely_logging.clone();
@@ -194,7 +194,7 @@ pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,St
 }
 
 /// TODO(andreal)
-pub fn execute_from_args_logging<I, T, F>(iter: I, logging_config: LogManager, func: F) -> Result<WorkerGuards<T>,String> 
+pub fn execute_from_args_logging<I, T, F>(iter: I, logging_config: LoggerConfig, func: F) -> Result<WorkerGuards<T>,String> 
     where I: Iterator<Item=String>, 
           T:Send+'static,
           F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static, {

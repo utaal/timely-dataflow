@@ -5,7 +5,10 @@ use std::cell::RefCell;
 use std::io::Write;
 use std::fs::File;
 use std::rc::Rc;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, Mutex};
+use std::hash::Hash;
+
+use std::collections::HashMap;
 
 use ::Data;
 
@@ -36,17 +39,76 @@ pub type Logger = Rc<BufferingLogger<LogEvent>>;
 
 /// TODO(andreal)
 pub struct LogManager {
+    timely_logs: Arc<Mutex<HashMap<
+        EventsSetup,
+        Arc<Mutex<EventStreamSubscriptionManager<LogEvent>>>>>>,
+    communication_logs: Arc<Mutex<HashMap<
+        CommsSetup,
+        Arc<Mutex<EventStreamSubscriptionManager<CommsEvent>>>>>>,
+}
+
+/// TODO(andreal)
+pub struct LoggerConfig {
     /// TODO(andreal)
     pub timely_logging: Arc<Fn(EventsSetup)->Rc<BufferingLogger<LogEvent>>+Send+Sync>,
     /// TODO(andreal)
     pub communication_logging: Arc<Fn(CommsSetup)->Rc<BufferingLogger<CommsEvent>>+Send+Sync>,
 }
 
-impl Default for LogManager {
+impl LoggerConfig {
+    fn make_logger<S: Eq+Hash, E: Clone+'static>(
+        setup: S,
+        logs: Arc<Mutex<HashMap<S, Arc<Mutex<EventStreamSubscriptionManager<E>>>>>>)
+        -> Rc<BufferingLogger<E>> {
+
+        let event_manager: Arc<Mutex<EventStreamSubscriptionManager<E>>> =
+            Arc::new(Mutex::new(Default::default()));
+
+        logs.lock().unwrap().insert(
+            setup,
+            event_manager.clone());
+
+        Rc::new(BufferingLogger::new(Box::new(move |evs| {
+            for pusher in event_manager.lock().unwrap().event_pushers.iter_mut() {
+                pusher.push(Event::Messages(event_manager.lock().unwrap().frontier, evs.clone()));
+            }
+        })))
+    }
+
+    /// TODO(andreal)
+    pub fn new(log_manager: &mut LogManager) -> Self {
+        let timely_logs = log_manager.timely_logs.clone();
+        let communication_logs = log_manager.communication_logs.clone();
+        LoggerConfig {
+            timely_logging: Arc::new(move |events_setup: EventsSetup| {
+                LoggerConfig::make_logger(events_setup, timely_logs.clone())
+            }),
+            communication_logging: Arc::new(move |comms_setup: CommsSetup| {
+                LoggerConfig::make_logger(comms_setup, communication_logs.clone())
+            }),
+        }
+    }
+}
+
+impl Default for LoggerConfig {
     fn default() -> Self {
-        LogManager {
-            timely_logging: Arc::new(|_| Rc::new(BufferingLogger::new())),
-            communication_logging: Arc::new(|_| Rc::new(BufferingLogger::new())),
+        LoggerConfig {
+            timely_logging: Arc::new(|_| Rc::new(BufferingLogger::new(Box::new(|_| {})))),
+            communication_logging: Arc::new(|_| Rc::new(BufferingLogger::new(Box::new(|_| {})))),
+        }
+    }
+}
+
+struct EventStreamSubscriptionManager<E> {
+    frontier: Product<RootTimestamp, u64>,
+    event_pushers: Vec<Box<EventPusher<Product<RootTimestamp, u64>, E>+Send+Sync>>,
+}
+
+impl<E> Default for EventStreamSubscriptionManager<E> {
+    fn default() -> Self {
+        EventStreamSubscriptionManager {
+            frontier: Default::default(),
+            event_pushers: Vec::new(),
         }
     }
 }
