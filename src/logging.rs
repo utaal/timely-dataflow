@@ -77,18 +77,14 @@ impl<V: Abomonation> ::timely_logging::Logger for TimelyLogger<V> where timely_l
 /// Initializes logging; called as part of `Root` initialization.
 pub fn initialize<A: Allocate>(root: &mut Root<A>) {
     eprintln!("logging: index {}/{}", root.index(), root.peers());
-    LOG_EVENT_STREAM.with(|x| {
-        x.borrow_mut().setup = Some(EventsSetup {
-            index: root.index(),
-        });
-    });
+    // Some(EventsSetup {
+    //     index: root.index(),
+    // })
 }
 
 /// Flushes logs; called by `Root::step`.
 pub fn flush_logs() {
-    LOG_EVENT_STREAM.with(|x| {
-        x.borrow_mut().flush();
-    });
+    unimplemented!();
 }
 
 // trait ScheduleLogger {
@@ -200,82 +196,4 @@ impl<T: Timestamp, V: Clone, P: EventPusher<T, V>> Drop for EventStreamWriter<T,
         self.pusher.push(Event::Progress(vec![(self.cur_time.clone(), -1)]));
         eprintln!("dropped: {:?}", self.cur_time);
     }
-}
-
-// /// Special logger for ScheduleEvents
-// pub struct ScheduleLogEventStream<S: Write> {
-//     logger: LogEventStream<ScheduleEvent, S>,
-//     seen_inactive_step: RefCell<bool>,
-// }
-// 
-// impl<S: Write> ScheduleLogEventStream<S> {
-//     fn new() -> ScheduleLogEventStream<S> {
-//         ScheduleLogEventStream {
-//             logger: LogEventStream::new(),
-//             seen_inactive_step: RefCell::new(false),
-//         }
-//     }
-// 
-//     fn set(&self, stream: S) {
-//         self.logger.set(stream)
-//     }
-// 
-//     fn flush_forced(&self) {
-//         self.flush();
-//         *self.seen_inactive_step.borrow_mut() = false;
-//     }
-// 
-//     fn flush_maybe(&self) {
-//         if self.logger.contains_active_ops() {
-//             self.flush_forced();
-//             return;
-//         }
-//         if !*self.seen_inactive_step.borrow() {
-//             self.flush_forced();
-//             *self.seen_inactive_step.borrow_mut() = true
-//         } else {
-//             self.logger.clear();
-//         }
-// 
-//     }
-// }
-// 
-// impl<S: Write> Logger for ScheduleLogEventStream<S> {
-//     type Record = ScheduleEvent;
-//     fn log(&self, record: Self::Record) {
-//         self.logger.log(record)
-//     }
-//     fn flush(&self) {
-//         self.logger.flush()
-//     }
-//     // fn record_count(&self) -> usize {
-//     //     self.logger.record_count()
-//     // }
-//     // fn clear(&self) {
-//     //     self.logger.clear()
-//     // }
-// 
-// }
-
-thread_local!{
-    /// TODO(andreal)
-    static LOG_EVENT_STREAM: Rc<RefCell<LogEventStream<EventsSetup, LogEvent>>> = Rc::new(RefCell::new(LogEventStream::new()));
-    /// Logs channel creation.
-    pub static CHANNELS: TimelyLogger<ChannelsEvent> = LOG_EVENT_STREAM.with(|x| TimelyLogger::new(x.clone()));
-    /// Logs progress transmission.
-    pub static PROGRESS: TimelyLogger<ProgressEvent> = LOG_EVENT_STREAM.with(|x| TimelyLogger::new(x.clone()));
-    /// Logs message transmission.
-    pub static MESSAGES: TimelyLogger<MessagesEvent> = LOG_EVENT_STREAM.with(|x| TimelyLogger::new(x.clone()));
-    /// Logs operator scheduling.
-    pub static SCHEDULE: TimelyLogger<ScheduleEvent> = LOG_EVENT_STREAM.with(|x| TimelyLogger::new(x.clone()));
-    /// Logs delivery of message to an operator input.
-    pub static GUARDED_MESSAGE: TimelyLogger<GuardedMessageEvent> = LOG_EVENT_STREAM.with(|x| TimelyLogger::new(x.clone()));
-    /// Logs delivery of notification to an operator.
-    pub static GUARDED_PROGRESS: TimelyLogger<GuardedProgressEvent> = LOG_EVENT_STREAM.with(|x| TimelyLogger::new(x.clone()));
-    /// Logs push_external_progress() calls for each operator
-    pub static PUSH_PROGRESS: TimelyLogger<PushProgressEvent> = LOG_EVENT_STREAM.with(|x| TimelyLogger::new(x.clone()));
-    /// Logs application-defined log events
-    pub static APPLICATION: TimelyLogger<ApplicationEvent> = LOG_EVENT_STREAM.with(|x| TimelyLogger::new(x.clone()));
-    /// Logs application-defined log events
-    pub static COMM_CHANNELS: TimelyLogger<CommChannelsEvent> = LOG_EVENT_STREAM.with(|x| TimelyLogger::new(x.clone()));
 }

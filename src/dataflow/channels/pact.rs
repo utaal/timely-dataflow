@@ -15,6 +15,8 @@ use timely_communication::allocator::Thread;
 use dataflow::channels::pushers::Exchange as ExchangePusher;
 use dataflow::channels::{Message, Content};
 
+use logging::Logger;
+
 use abomonation::Abomonation;
 
 /// A ParallelizationContract allocates paired `Push` and `Pull` implementors.
@@ -24,7 +26,7 @@ pub trait ParallelizationContract<T: 'static, D: 'static> {
     /// Type implementing `Pull` produced by this pact.
     type Puller: Pull<(T, Content<D>)>+'static;
     /// Alloctes a matched pair of push and pull endpoints implementing the pact.
-    fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize) -> (Self::Pusher, Self::Puller);
+    fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize, logging: Logger) -> (Self::Pusher, Self::Puller);
 }
 
 /// A direct connection
@@ -33,12 +35,12 @@ impl<T: 'static, D: 'static> ParallelizationContract<T, D> for Pipeline {
     // TODO: These two could mention types in communication::thread, but they are currently private.
     type Pusher = Pusher<T, D, Box<Push<Message<T, D>>>>;
     type Puller = Puller<T, D, Box<Pull<Message<T, D>>>>;
-    fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize) -> (Self::Pusher, Self::Puller) {
+    fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize, logging: Logger) -> (Self::Pusher, Self::Puller) {
         // ignore &mut A and use thread allocator
         let (mut pushers, puller) = Thread::new::<Message<T, D>>();
 
-        (Pusher::new(pushers.pop().unwrap(), allocator.index(), allocator.index(), identifier, None),
-         Puller::new(puller, allocator.index(), identifier, None))
+        (Pusher::new(pushers.pop().unwrap(), allocator.index(), allocator.index(), identifier, None, logging.clone()),
+         Puller::new(puller, allocator.index(), identifier, None, logging.clone()))
     }
 }
 
@@ -62,10 +64,10 @@ impl<T: Eq+Data+Abomonation, D: Data+Abomonation, F: Fn(&D)->u64+'static> Parall
     //       Could specialize `ExchangePusher` to a time-free version.
     type Pusher = Box<Push<(T, Content<D>)>>;
     type Puller = Puller<T, D, Box<Pull<Message<T, D>>>>;
-    fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize) -> (Self::Pusher, Self::Puller) {
+    fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize, logging: Logger) -> (Self::Pusher, Self::Puller) {
         let (senders, receiver, channel_id) = allocator.allocate::<Message<T, D>>();
-        let senders = senders.into_iter().enumerate().map(|(i,x)| Pusher::new(x, allocator.index(), i, identifier, channel_id)).collect::<Vec<_>>();
-        (Box::new(ExchangePusher::new(senders, move |_, d| (self.hash_func)(d))), Puller::new(receiver, allocator.index(), identifier, channel_id))
+        let senders = senders.into_iter().enumerate().map(|(i,x)| Pusher::new(x, allocator.index(), i, identifier, channel_id, logging.clone())).collect::<Vec<_>>();
+        (Box::new(ExchangePusher::new(senders, move |_, d| (self.hash_func)(d))), Puller::new(receiver, allocator.index(), identifier, channel_id, logging.clone()))
     }
 }
 
@@ -84,10 +86,10 @@ impl<D, T, F: Fn(&T, &D)->u64> TimeExchange<D, T, F> {
 impl<T: Eq+Data+Abomonation, D: Data+Abomonation, F: Fn(&T, &D)->u64+'static> ParallelizationContract<T, D> for TimeExchange<D, T, F> {
     type Pusher = ExchangePusher<T, D, Pusher<T, D, Box<Push<Message<T, D>>>>, F>;
     type Puller = Puller<T, D, Box<Pull<Message<T, D>>>>;
-    fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize) -> (Self::Pusher, Self::Puller) {
+    fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize, logging: Logger) -> (Self::Pusher, Self::Puller) {
         let (senders, receiver, channel_id) = allocator.allocate::<Message<T, D>>();
-        let senders = senders.into_iter().enumerate().map(|(i,x)| Pusher::new(x, allocator.index(), i, identifier, channel_id)).collect::<Vec<_>>();
-        (ExchangePusher::new(senders, self.hash_func), Puller::new(receiver, allocator.index(), identifier, channel_id))
+        let senders = senders.into_iter().enumerate().map(|(i,x)| Pusher::new(x, allocator.index(), i, identifier, channel_id, logging.clone())).collect::<Vec<_>>();
+        (ExchangePusher::new(senders, self.hash_func), Puller::new(receiver, allocator.index(), identifier, channel_id, logging.clone()))
     }
 }
 
@@ -101,10 +103,11 @@ pub struct Pusher<T, D, P: Push<Message<T, D>>> {
     source: usize,
     target: usize,
     phantom: ::std::marker::PhantomData<(T, D)>,
+    logging: Logger,
 }
 impl<T, D, P: Push<Message<T, D>>> Pusher<T, D, P> {
     /// Allocates a new pusher.
-    pub fn new(pusher: P, source: usize, target: usize, channel: usize, comm_channel: Option<usize>) -> Self {
+    pub fn new(pusher: P, source: usize, target: usize, channel: usize, comm_channel: Option<usize>, logging: Logger) -> Self {
         Pusher {
             pusher: pusher,
             channel: channel,
@@ -113,6 +116,7 @@ impl<T, D, P: Push<Message<T, D>>> Pusher<T, D, P> {
             source: source,
             target: target,
             phantom: ::std::marker::PhantomData,
+            logging: logging,
         }
     }
 }
@@ -130,7 +134,7 @@ impl<T, D, P: Push<Message<T, D>>> Push<(T, Content<D>)> for Pusher<T, D, P> {
             self.pusher.push(&mut message);
             *pair = message.map(|x| (x.time, x.data));
 
-            ::logging::log(&::logging::MESSAGES, ::logging::MessagesEvent {
+            (self.logging)(::timely_logging::Event::Messages(::timely_logging::MessagesEvent {
                 is_send: true,
                 channel: self.channel,
                 comm_channel: self.comm_channel,
@@ -138,7 +142,7 @@ impl<T, D, P: Push<Message<T, D>>> Push<(T, Content<D>)> for Pusher<T, D, P> {
                 target: self.target,
                 seq_no: counter,
                 length: length,
-            });
+            }));
 
             // Log something about (index, counter, time?, length?);
         }
@@ -154,10 +158,11 @@ pub struct Puller<T, D, P: Pull<Message<T, D>>> {
     comm_channel: Option<usize>,
     counter: usize,
     index: usize,
+    logging: Logger,
 }
 impl<T, D, P: Pull<Message<T, D>>> Puller<T, D, P> {
     /// Allocates a new `Puller`.
-    pub fn new(puller: P, index: usize, channel: usize, comm_channel: Option<usize>) -> Self {
+    pub fn new(puller: P, index: usize, channel: usize, comm_channel: Option<usize>, logging: Logger) -> Self {
         Puller {
             puller: puller,
             channel: channel,
@@ -165,6 +170,7 @@ impl<T, D, P: Pull<Message<T, D>>> Puller<T, D, P> {
             current: None,
             counter: 0,
             index: index,
+            logging: logging,
         }
     }
 }
@@ -178,7 +184,7 @@ impl<T, D, P: Pull<Message<T, D>>> Pull<(T, Content<D>)> for Puller<T, D, P> {
 
         if let Some(ref message) = previous.as_ref() {
 
-            ::logging::log(&::logging::MESSAGES, ::logging::MessagesEvent {
+            (self.logging)(::timely_logging::Event::Messages(::logging::MessagesEvent {
                 is_send: false,
                 channel: self.channel,
                 comm_channel: self.comm_channel,
@@ -186,7 +192,7 @@ impl<T, D, P: Pull<Message<T, D>>> Pull<(T, Content<D>)> for Puller<T, D, P> {
                 target: self.index,
                 seq_no: message.seq,
                 length: message.data.len(),
-            });
+            }));
         }
 
         self.current = previous.map(|message| (message.time, message.data));

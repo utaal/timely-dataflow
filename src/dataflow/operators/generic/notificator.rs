@@ -3,6 +3,7 @@ use std::collections::VecDeque;
 use progress::frontier::MutableAntichain;
 use progress::Timestamp;
 use dataflow::operators::Capability;
+use logging::Logger;
 
 /// Tracks requests for notification and delivers available notifications.
 ///
@@ -15,16 +16,19 @@ use dataflow::operators::Capability;
 pub struct Notificator<'a, T: Timestamp> {
     frontiers: &'a [&'a MutableAntichain<T>],
     inner: &'a mut FrontierNotificator<T>,
+    logging: &'a Logger,
 }
 
 impl<'a, T: Timestamp> Notificator<'a, T> {
     /// Allocates a new `Notificator`.
     pub fn new(
         frontiers: &'a [&'a MutableAntichain<T>],
-        inner: &'a mut FrontierNotificator<T>) -> Notificator<'a, T> {
+        inner: &'a mut FrontierNotificator<T>,
+        logging: &'a Logger) -> Notificator<'a, T> {
         Notificator {
             frontiers: frontiers,
             inner: inner,
+            logging: logging,
         }
     }
 
@@ -83,9 +87,11 @@ impl<'a, T: Timestamp> Notificator<'a, T> {
     #[inline]
     pub fn for_each<F: FnMut(Capability<T>, u64, &mut Notificator<T>)>(&mut self, mut logic: F) {
         while let Some((cap, count)) = self.next() {
-            ::logging::log(&::logging::GUARDED_PROGRESS, ::timely_logging::GuardedProgressEvent { is_start: true });
+            (self.logging)(::timely_logging::Event::GuardedProgress(
+                    ::timely_logging::GuardedProgressEvent { is_start: true }));
             logic(cap, count, self);
-            ::logging::log(&::logging::GUARDED_PROGRESS, ::timely_logging::GuardedProgressEvent { is_start: false });
+            (self.logging)(::timely_logging::Event::GuardedProgress(
+                    ::timely_logging::GuardedProgressEvent { is_start: false }));
         }
     }
 }
@@ -397,13 +403,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
     pub fn for_each<'a, F: FnMut(Capability<T>, &mut FrontierNotificator<T>)>(&mut self, frontiers: &'a [&'a MutableAntichain<T>], mut logic: F) {
         self.make_available(frontiers);
         while let Some(cap) = self.available.pop_front() {
-            ::logging::log(&::logging::GUARDED_PROGRESS, ::logging::GuardedProgressEvent {
-                is_start: true,
-            });
             logic(cap, self);
-            ::logging::log(&::logging::GUARDED_PROGRESS, ::logging::GuardedProgressEvent {
-                is_start: false,
-            });
         }
     }
 }

@@ -523,7 +523,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
     pub fn new_from(index: usize, mut path: Vec<usize>, logging: Logger) -> SubgraphBuilder<TOuter, TInner> {
         path.push(index);
 
-        let children = vec![PerOperatorState::empty(path.clone())];
+        let children = vec![PerOperatorState::empty(path.clone(), logging.clone())];
 
         SubgraphBuilder {
             name:                   "Subgraph".into(),
@@ -558,7 +558,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
                 name: child.name().to_owned(),
             }));
         }
-        self.children.push(PerOperatorState::new(child, index, self.path.clone(), identifier))
+        self.children.push(PerOperatorState::new(child, index, self.path.clone(), identifier, self.logging.clone()))
     }
 
     /// Now that initialization is complete, actually build a subgraph.
@@ -577,7 +577,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
             self.children[source.index].edges[source.port].push(target);
         }
 
-        let progcaster = Progcaster::new(allocator, &self.path);
+        let progcaster = Progcaster::new(allocator, &self.path, self.logging.clone());
 
         Subgraph {
             name: self.name,
@@ -783,6 +783,8 @@ struct PerOperatorState<T: Timestamp> {
     produced_buffer: Vec<ChangeBatch<T>>, // per-output: temp buffer used for pull_internal_progress.
 
     external_buffer: Vec<ChangeBatch<T>>, // per-input: temp buffer used for push_external_progress.
+
+    logging: Logger,
 }
 
 impl<T: Timestamp> PerOperatorState<T> {
@@ -805,7 +807,7 @@ impl<T: Timestamp> PerOperatorState<T> {
         self.source_target_summaries.push(vec![]);
     }
 
-    fn empty(mut path: Vec<usize>) -> PerOperatorState<T> {
+    fn empty(mut path: Vec<usize>, logging: Logger) -> PerOperatorState<T> {
         path.push(0);
         PerOperatorState {
             name:       "External".to_owned(),
@@ -830,10 +832,12 @@ impl<T: Timestamp> PerOperatorState<T> {
             target_target_summaries: Vec::new(),
             source_target_summaries: Vec::new(),
             target_source_summaries: Vec::new(),
+
+            logging: logging,
         }
     }
 
-    pub fn new(mut scope: Box<Operate<T>>, index: usize, mut path: Vec<usize>, identifier: usize) -> PerOperatorState<T> {
+    pub fn new(mut scope: Box<Operate<T>>, index: usize, mut path: Vec<usize>, identifier: usize, logging: Logger) -> PerOperatorState<T> {
 
         let local = scope.local();
         let inputs = scope.inputs();
@@ -881,6 +885,8 @@ impl<T: Timestamp> PerOperatorState<T> {
             source_target_summaries: vec![vec![]; outputs],
 
             target_source_summaries:    new_summary,
+
+            logging:                    logging,
         };
 
         // TODO : Gross. Fix.
@@ -928,9 +934,9 @@ impl<T: Timestamp> PerOperatorState<T> {
         {
             let changes = &mut self.external_buffer;
             if changes.iter_mut().any(|ref mut c| !c.is_empty()) {
-                ::logging::log(&::logging::PUSH_PROGRESS, ::logging::PushProgressEvent {
+                (self.logging)(::timely_logging::Event::PushProgress(::timely_logging::PushProgressEvent {
                     op_id: self.id,
-                });
+                }));
             }
             self.operator.as_mut().map(|x| x.push_external_progress(changes));
             if changes.iter_mut().any(|x| !x.is_empty()) {
@@ -945,9 +951,9 @@ impl<T: Timestamp> PerOperatorState<T> {
 
         let active = {
 
-            ::logging::log(&::logging::SCHEDULE, ::logging::ScheduleEvent {
+            (self.logging)(::timely_logging::Event::Schedule(::timely_logging::ScheduleEvent {
                 id: self.id, start_stop: ::logging::StartStop::Start
-            });
+            }));
 
             if cfg!(feature = "logging") {
                 assert!(self.consumed_buffer.iter_mut().all(|cm| cm.is_empty()));
@@ -971,10 +977,9 @@ impl<T: Timestamp> PerOperatorState<T> {
                     self.internal_buffer.iter_mut().any(|cm| !cm.is_empty()) ||
                     self.produced_buffer.iter_mut().any(|cm| !cm.is_empty());
 
-                ::logging::log(&::logging::SCHEDULE,
-                               ::logging::ScheduleEvent {
-                                   id: self.id, start_stop: ::logging::StartStop::Stop { activity: did_work }
-                               });
+                (self.logging)(::timely_logging::Event::Schedule(::timely_logging::ScheduleEvent {
+                    id: self.id, start_stop: ::logging::StartStop::Stop { activity: did_work }
+                }));
             }
 
             result
