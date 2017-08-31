@@ -16,7 +16,7 @@ pub struct Binary {
     // for loading up state in the networking threads.
     pub readers:    Vec<Sender<((usize, usize), Sender<Vec<u8>>)>>,
     pub senders:    Vec<Sender<(MessageHeader, Vec<u8>)>>,
-    pub log_sender: Arc<Fn()->Rc<::logging::LogSender>+Send+Sync>,
+    pub log_sender: Arc<Fn(::timely_logging::CommsSetup)->::logging::LogSender+Send+Sync>,
 }
 
 impl Binary {
@@ -49,7 +49,12 @@ impl Allocate for Binary {
                     length:     0,
                     seqno:      0,
                 };
-                pushers.push(Box::new(Pusher::new(header, self.senders[index].clone(), (self.log_sender)())));
+                let logger = (self.log_sender)(::timely_logging::CommsSetup {
+                    process: self.index,
+                    sender: true,
+                    remote: Some(target_index),
+                });
+                pushers.push(Box::new(Pusher::new(header, self.senders[index].clone(), logger)));
             }
         }
 
@@ -64,7 +69,12 @@ impl Allocate for Binary {
             reader.send(((self.index, self.allocated), send.clone())).unwrap();
         }
 
-        let pullable = Box::new(Puller::new(inner_recv, recv, (self.log_sender)()));
+        let logger = (self.log_sender)(::timely_logging::CommsSetup {
+            process: self.index,
+            sender: false,
+            remote: None,
+        });
+        let pullable = Box::new(Puller::new(inner_recv, recv, logger));
 
         self.allocated += 1;
 
@@ -76,11 +86,11 @@ struct Pusher<T> {
     header:     MessageHeader,
     sender:     Sender<(MessageHeader, Vec<u8>)>,   // targets for each remote destination
     phantom:    ::std::marker::PhantomData<T>,
-    log_sender: Rc<::logging::LogSender>,
+    log_sender: ::logging::LogSender,
 }
 
 impl<T> Pusher<T> {
-    pub fn new(header: MessageHeader, sender: Sender<(MessageHeader, Vec<u8>)>, log_sender: Rc<::logging::LogSender>) -> Pusher<T> {
+    pub fn new(header: MessageHeader, sender: Sender<(MessageHeader, Vec<u8>)>, log_sender: ::logging::LogSender) -> Pusher<T> {
         Pusher {
             header:     header,
             sender:     sender,
@@ -93,12 +103,7 @@ impl<T> Pusher<T> {
 impl<T:Data> Push<T> for Pusher<T> {
     #[inline] fn push(&mut self, element: &mut Option<T>) {
         if let Some(ref mut element) = *element {
-            self.log_sender.send(
-                ::timely_logging::CommsSetup {
-                    process: unimplemented!(),
-                    remote: unimplemented!(),
-                    sender: unimplemented!(),
-                },
+            (self.log_sender)(
                 ::timely_logging::CommEvent::Serialization(::timely_logging::SerializationEvent {
                     seq_no: Some(self.header.seqno),
                     is_start: true,
@@ -108,13 +113,7 @@ impl<T:Data> Push<T> for Pusher<T> {
             let mut header = self.header;
             header.length = bytes.len();
             self.sender.send((header, bytes)).ok();     // TODO : should be unwrap()?
-            self.log_sender.send(
-                ::timely_logging::CommsSetup {
-                    process: unimplemented!(),
-                    remote: unimplemented!(),
-                    sender: unimplemented!(),
-
-                },
+            (self.log_sender)(
                 ::timely_logging::CommEvent::Serialization(::timely_logging::SerializationEvent {
                     seq_no: Some(self.header.seqno),
                     is_start: true,
@@ -128,10 +127,10 @@ struct Puller<T> {
     inner: Box<Pull<T>>,            // inner pullable (e.g. intra-process typed queue)
     current: Option<T>,
     receiver: Receiver<Vec<u8>>,    // source of serialized buffers
-    log_sender: Rc<::logging::LogSender>,
+    log_sender: ::logging::LogSender,
 }
 impl<T:Data> Puller<T> {
-    fn new(inner: Box<Pull<T>>, receiver: Receiver<Vec<u8>>, log_sender: Rc<::logging::LogSender>) -> Puller<T> {
+    fn new(inner: Box<Pull<T>>, receiver: Receiver<Vec<u8>>, log_sender: ::logging::LogSender) -> Puller<T> {
         Puller { inner: inner, receiver: receiver, current: None, log_sender: log_sender }
     }
 }
@@ -144,26 +143,16 @@ impl<T:Data> Pull<T> for Puller<T> {
         if inner.is_some() { inner }
         else {
             self.current = self.receiver.try_recv().ok().map(|mut bytes| {
-                log_sender.send(
-                    ::timely_logging::CommsSetup {
-                        process: unimplemented!(),
-                        remote: unimplemented!(),
-                        sender: unimplemented!(),
-                    },
+                log_sender(
                     ::timely_logging::CommEvent::Serialization(::timely_logging::SerializationEvent {
                         seq_no: None,
                         is_start: true,
                     }));
                 let result = <T as Serialize>::from_bytes(&mut bytes);
-                log_sender.send(
-                    ::timely_logging::CommsSetup {
-                        process: unimplemented!(),
-                        remote: unimplemented!(),
-                        sender: unimplemented!(),
-                    },
+                log_sender(
                     ::timely_logging::CommEvent::Serialization(::timely_logging::SerializationEvent {
                         seq_no: None,
-                        is_start: true,
+                        is_start: false,
                     }));
                 result
             });

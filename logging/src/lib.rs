@@ -221,7 +221,7 @@ unsafe_abomonate!(EventsSetup : index);
 pub struct CommsSetup {
     pub sender: bool,
     pub process: usize,
-    pub remote: usize,
+    pub remote: Option<usize>,
 }
 
 unsafe_abomonate!(CommsSetup : sender, process, remote);
