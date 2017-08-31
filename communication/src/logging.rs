@@ -5,9 +5,9 @@ use std::rc::Rc;
 
 use abomonation::Abomonation;
 
-use timely_logging::{Logger, CommEvent, CommsSetup};
+use timely_logging::{Logger, CommsEvent, CommsSetup};
 pub use timely_logging::CommunicationEvent;
 pub use timely_logging::SerializationEvent;
 
-pub type LogSender = Rc<Fn(CommEvent)->()>;
+pub type LogSender = Rc<Fn(CommsEvent)->()>;
 

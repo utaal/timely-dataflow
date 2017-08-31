@@ -952,7 +952,7 @@ impl<T: Timestamp> PerOperatorState<T> {
         let active = {
 
             (self.logging)(::timely_logging::Event::Schedule(::timely_logging::ScheduleEvent {
-                id: self.id, start_stop: ::logging::StartStop::Start
+                id: self.id, start_stop: ::timely_logging::StartStop::Start
             }));
 
             if cfg!(feature = "logging") {
@@ -978,7 +978,7 @@ impl<T: Timestamp> PerOperatorState<T> {
                     self.produced_buffer.iter_mut().any(|cm| !cm.is_empty());
 
                 (self.logging)(::timely_logging::Event::Schedule(::timely_logging::ScheduleEvent {
-                    id: self.id, start_stop: ::logging::StartStop::Stop { activity: did_work }
+                    id: self.id, start_stop: ::timely_logging::StartStop::Stop { activity: did_work }
                 }));
             }
 

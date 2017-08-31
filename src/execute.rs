@@ -1,6 +1,7 @@
 //! Starts a timely dataflow execution from configuration information and per-worker logic.
 
 use std::rc::Rc;
+use std::sync::Arc;
 use timely_communication::{initialize, Configuration, Allocator, WorkerGuards};
 use dataflow::scopes::{Root, Child};
 
@@ -56,7 +57,7 @@ where T: Send+'static,
         let result = root.dataflow(|x| func(x));
         while root.step() { }
         result
-    }, unimplemented!());
+    }, Arc::new(|_| Rc::new(|_| {})));
 
     guards.unwrap() // assert the computation started correctly
           .join()   // wait for the worker to finish
@@ -130,7 +131,7 @@ where T:Send+'static,
         let result = func(&mut root);
         while root.step() { }
         result
-    }, unimplemented!())
+    }, Arc::new(|_| Rc::new(|_| {})))
 }
 
 /// Executes a timely dataflow from supplied arguments and per-communicator logic.

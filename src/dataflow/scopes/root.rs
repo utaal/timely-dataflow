@@ -33,11 +33,6 @@ impl<A: Allocate> Root<A> {
             logging: logging,
         };
 
-        // LOGGING
-        if cfg!(feature = "logging") {
-            ::logging::initialize(&mut result);
-        }
-
         result
     }
 
@@ -56,9 +51,7 @@ impl<A: Allocate> Root<A> {
         // discard completed dataflows.
         self.dataflows.borrow_mut().retain(|dataflow| dataflow.active());
 
-        if cfg!(feature = "logging") {
-            ::logging::flush_logs();
-        }
+        // TODO(andreal) flush logs?
 
         active
     }

@@ -184,7 +184,7 @@ impl<T, D, P: Pull<Message<T, D>>> Pull<(T, Content<D>)> for Puller<T, D, P> {
 
         if let Some(ref message) = previous.as_ref() {
 
-            (self.logging)(::timely_logging::Event::Messages(::logging::MessagesEvent {
+            (self.logging)(::timely_logging::Event::Messages(::timely_logging::MessagesEvent {
                 is_send: false,
                 channel: self.channel,
                 comm_channel: self.comm_channel,

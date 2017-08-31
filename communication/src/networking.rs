@@ -124,7 +124,7 @@ impl<R: Read> BinaryReceiver<R> {
                 let mut slice = &self.buffer[..self.length];
                 while let Some(header) = MessageHeader::try_read(&mut slice) {
                     (self.log_sender)(
-                        ::timely_logging::CommEvent::Communication(::logging::CommunicationEvent {
+                        ::timely_logging::CommsEvent::Communication(::logging::CommunicationEvent {
                             is_send: false,
                             comm_channel: header.channel,
                             source: header.source,
@@ -190,7 +190,7 @@ impl<W: Write> BinarySender<W> {
             for (header, mut buffer) in stash.drain_temp() {
                 assert!(header.length == buffer.len());
                 (self.log_sender)(
-                    ::timely_logging::CommEvent::Communication(::logging::CommunicationEvent {
+                    ::timely_logging::CommsEvent::Communication(::logging::CommunicationEvent {
                         is_send: true,
                         comm_channel: header.channel,
                         source: header.source,

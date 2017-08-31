@@ -104,7 +104,7 @@ impl<T:Data> Push<T> for Pusher<T> {
     #[inline] fn push(&mut self, element: &mut Option<T>) {
         if let Some(ref mut element) = *element {
             (self.log_sender)(
-                ::timely_logging::CommEvent::Serialization(::timely_logging::SerializationEvent {
+                ::timely_logging::CommsEvent::Serialization(::timely_logging::SerializationEvent {
                     seq_no: Some(self.header.seqno),
                     is_start: true,
                 }));
@@ -114,7 +114,7 @@ impl<T:Data> Push<T> for Pusher<T> {
             header.length = bytes.len();
             self.sender.send((header, bytes)).ok();     // TODO : should be unwrap()?
             (self.log_sender)(
-                ::timely_logging::CommEvent::Serialization(::timely_logging::SerializationEvent {
+                ::timely_logging::CommsEvent::Serialization(::timely_logging::SerializationEvent {
                     seq_no: Some(self.header.seqno),
                     is_start: true,
                 }));
@@ -144,13 +144,13 @@ impl<T:Data> Pull<T> for Puller<T> {
         else {
             self.current = self.receiver.try_recv().ok().map(|mut bytes| {
                 log_sender(
-                    ::timely_logging::CommEvent::Serialization(::timely_logging::SerializationEvent {
+                    ::timely_logging::CommsEvent::Serialization(::timely_logging::SerializationEvent {
                         seq_no: None,
                         is_start: true,
                     }));
                 let result = <T as Serialize>::from_bytes(&mut bytes);
                 log_sender(
-                    ::timely_logging::CommEvent::Serialization(::timely_logging::SerializationEvent {
+                    ::timely_logging::CommsEvent::Serialization(::timely_logging::SerializationEvent {
                         seq_no: None,
                         is_start: false,
                     }));

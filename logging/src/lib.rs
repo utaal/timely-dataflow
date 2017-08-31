@@ -265,17 +265,17 @@ pub enum Event {
 }
 
 #[derive(Debug, Clone, Abomonation)]
-pub enum CommEvent {
+pub enum CommsEvent {
     /*  0 */ Communication(CommunicationEvent),
     /*  1 */ Serialization(SerializationEvent),
 }
 
-impl From<CommunicationEvent> for CommEvent {
-    fn from(v: CommunicationEvent) -> CommEvent { CommEvent::Communication(v) }
+impl From<CommunicationEvent> for CommsEvent {
+    fn from(v: CommunicationEvent) -> CommsEvent { CommsEvent::Communication(v) }
 }
 
-impl From<SerializationEvent> for CommEvent {
-    fn from(v: SerializationEvent) -> CommEvent { CommEvent::Serialization(v) }
+impl From<SerializationEvent> for CommsEvent {
+    fn from(v: SerializationEvent) -> CommsEvent { CommsEvent::Serialization(v) }
 }
 
 impl From<OperatesEvent> for Event {

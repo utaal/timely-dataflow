@@ -28,19 +28,7 @@ use std::net::TcpStream;
 use timely_logging;
 use timely_logging::Event as LogEvent;
 use timely_logging::EventsSetup;
-use timely_logging::{CommEvent, CommsSetup};
-
-pub use timely_logging::OperatesEvent;
-pub use timely_logging::ChannelsEvent;
-pub use timely_logging::ProgressEvent;
-pub use timely_logging::MessagesEvent;
-pub use timely_logging::ScheduleEvent;
-pub use timely_logging::StartStop;
-pub use timely_logging::PushProgressEvent;
-pub use timely_logging::ApplicationEvent;
-pub use timely_logging::GuardedProgressEvent;
-pub use timely_logging::GuardedMessageEvent;
-pub use timely_logging::CommChannelsEvent;
+use timely_logging::{CommsEvent, CommsSetup};
 
 /// TODO(andreal)
 pub type Logger = Rc<Fn(::timely_logging::Event)->()>;
@@ -49,87 +37,6 @@ pub type Logger = Rc<Fn(::timely_logging::Event)->()>;
 pub fn log<T: ::timely_logging::Logger>(logger: &'static ::std::thread::LocalKey<T>, record: T::Record) {
     if cfg!(feature = "logging") {
         logger.with(|x| x.log(record));
-    }
-}
-
-/// TODO(andreal)
-pub struct TimelyLogger<V: Abomonation> where LogEvent: From<V> {
-    stream: Rc<RefCell<LogEventStream<EventsSetup, LogEvent>>>,
-    _v: ::std::marker::PhantomData<V>,
-}
-
-impl<V: Abomonation> TimelyLogger<V> where LogEvent: From<V> {
-    fn new(stream: Rc<RefCell<LogEventStream<EventsSetup, LogEvent>>>) -> TimelyLogger<V> {
-        TimelyLogger {
-            stream: stream,
-            _v: ::std::marker::PhantomData,
-        }
-    }
-}
-
-impl<V: Abomonation> ::timely_logging::Logger for TimelyLogger<V> where timely_logging::Event: From<V> {
-    type Record = V;
-    fn log(&self, record: V) {
-        self.stream.borrow_mut().log(LogEvent::from(record));
-    }
-}
-
-/// Initializes logging; called as part of `Root` initialization.
-pub fn initialize<A: Allocate>(root: &mut Root<A>) {
-    eprintln!("logging: index {}/{}", root.index(), root.peers());
-    // Some(EventsSetup {
-    //     index: root.index(),
-    // })
-}
-
-/// Flushes logs; called by `Root::step`.
-pub fn flush_logs() {
-    unimplemented!();
-}
-
-// trait ScheduleLogger {
-//     fn contains_active_ops(&self) -> bool;
-// }
-// 
-// impl<S: Write> ScheduleLogger for LogEventStream<ScheduleEvent, S> {
-//     fn contains_active_ops(&self) -> bool {
-//         self.buffer.borrow().iter().any(|&(ref evt, ts) | {
-//             match evt.start_stop {
-//                 StartStop::Stop { activity } => activity,
-//                 _ => false,
-//             }
-//         })
-//     }
-// }
-
-struct LogEventStream<S: Copy, E: Clone> {
-    setup: Option<S>,
-    writer: Option<Box<EventStreamInput<Product<RootTimestamp, u64>, (u64, S, E)>>>,
-    _s: ::std::marker::PhantomData<S>,
-    _e: ::std::marker::PhantomData<E>,
-}
-
-impl<S: Copy, E: Clone> LogEventStream<S, E> {
-    fn new() -> Self {
-        LogEventStream {
-            setup: None,
-            writer: None,
-            _s: ::std::marker::PhantomData,
-            _e: ::std::marker::PhantomData,
-        }
-    }
-
-    fn flush(&mut self) {
-        if let Some(ref mut writer) = self.writer {
-            writer.advance_by(RootTimestamp::new(::timely_logging::get_precise_time_ns()));
-        }
-    }
-
-    fn log(&mut self, record: E) {
-        if let Some(ref mut writer) = self.writer {
-            writer.send(
-                (::timely_logging::get_precise_time_ns(), self.setup.expect("logging not initialized"), record));
-        }
     }
 }
 
