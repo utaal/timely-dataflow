@@ -1,6 +1,5 @@
 //! Traits, implementations, and macros related to logging timely events.
 
-
 use std::cell::RefCell;
 use std::io::Write;
 use std::fs::File;
@@ -28,11 +27,11 @@ use abomonation::Abomonation;
 use std::io::BufWriter;
 use std::net::TcpStream;
 
-use timely_logging;
 use timely_logging::BufferingLogger;
 use timely_logging::Event as LogEvent;
 use timely_logging::EventsSetup;
 use timely_logging::{CommsEvent, CommsSetup};
+use timely_logging::LoggerBatch;
 
 /// TODO(andreal)
 pub type Logger = Rc<BufferingLogger<LogEvent>>;
@@ -68,9 +67,21 @@ impl LoggerConfig {
             setup,
             event_manager.clone());
 
-        Rc::new(BufferingLogger::new(Box::new(move |evs| {
+        Rc::new(BufferingLogger::new(Box::new(move |data| {
+            let mut frontier = &mut event_manager.lock().unwrap().frontier;
             for pusher in event_manager.lock().unwrap().event_pushers.iter_mut() {
-                pusher.push(Event::Messages(event_manager.lock().unwrap().frontier, evs.clone()));
+                match data {
+                    LoggerBatch::Logs(evs) => {
+                        pusher.push(Event::Messages(*frontier, evs.clone()));
+                        let &(last_ts, _) = evs.last().unwrap();
+                        let new_frontier = RootTimestamp::new(last_ts);
+                        pusher.push(Event::Progress(vec![(new_frontier, 1), (*frontier, -1)]));
+                        *frontier = new_frontier;
+                    },
+                    LoggerBatch::End => {
+                        pusher.push(Event::Progress(vec![(*frontier, -1)]));
+                    },
+                }
             }
         })))
     }
@@ -101,7 +112,7 @@ impl Default for LoggerConfig {
 
 struct EventStreamSubscriptionManager<E> {
     frontier: Product<RootTimestamp, u64>,
-    event_pushers: Vec<Box<EventPusher<Product<RootTimestamp, u64>, E>+Send+Sync>>,
+    event_pushers: Vec<Box<EventPusher<Product<RootTimestamp, u64>, (u64, E)>+Send+Sync>>,
 }
 
 impl<E> Default for EventStreamSubscriptionManager<E> {

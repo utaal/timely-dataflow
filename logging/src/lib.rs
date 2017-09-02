@@ -13,7 +13,6 @@ use std::io::Read;
 use std::io::BufWriter;
 use std::fs::{self, File};
 use std::path::Path;
-use std::net::TcpStream;
 
 pub struct StructMapWriter;
 
@@ -37,10 +36,6 @@ pub fn initialize_precise_time_ns() {
             time::precise_time_ns() as i64 - wall_time_ns
         });
     }
-}
-
-thread_local!{
-    pub static TCP_CHANNEL: RefCell<Option<BufWriter<TcpStream>>> = RefCell::new(None);
 }
 
 /// Logging methods
@@ -323,20 +318,39 @@ impl From<InputEvent> for Event {
     fn from(v: InputEvent) -> Event { Event::Input(v) }
 }
 
+const BUFFERING_LOGGER_CAPACITY: usize = 1024;
+
+pub enum LoggerBatch<'a, L: 'a> {
+    Logs(&'a Vec<(u64, L)>),
+    End,
+}
+
 pub struct BufferingLogger<L> {
-    buffer: RefCell<Vec<L>>,
-    pushers: Box<FnMut(&Vec<L>)->()>,
+    buffer: RefCell<Vec<(u64, L)>>,
+    pushers: RefCell<Box<Fn(LoggerBatch<L>)->()>>,
 }
 
 impl<L> BufferingLogger<L> {
-    pub fn new(pushers: Box<FnMut(&Vec<L>)->()>) -> Self {
+    pub fn new(pushers: Box<Fn(LoggerBatch<L>)->()>) -> Self {
         BufferingLogger {
-            buffer: RefCell::new(Vec::with_capacity(1024)),
-            pushers: pushers,
+            buffer: RefCell::new(Vec::with_capacity(BUFFERING_LOGGER_CAPACITY)),
+            pushers: RefCell::new(pushers),
         }
     }
 
     pub fn log(&self, l: L) {
-        self.buffer.borrow_mut().push(l);
+        let ts = get_precise_time_ns();
+        let mut buf = self.buffer.borrow_mut();
+        buf.push((ts, l));
+        if buf.len() >= BUFFERING_LOGGER_CAPACITY {
+            (*self.pushers.borrow_mut())(LoggerBatch::Logs(&buf));
+        }
+        buf.clear();
+    }
+}
+
+impl<L> Drop for BufferingLogger<L> {
+    fn drop(&mut self) {
+        (*self.pushers.borrow_mut())(LoggerBatch::End);
     }
 }
