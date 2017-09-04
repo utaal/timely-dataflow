@@ -320,17 +320,17 @@ impl From<InputEvent> for Event {
 
 const BUFFERING_LOGGER_CAPACITY: usize = 1024;
 
-pub enum LoggerBatch<'a, L: 'a> {
+pub enum LoggerBatch<'a, L: Clone+'a> {
     Logs(&'a Vec<(u64, L)>),
     End,
 }
 
-pub struct BufferingLogger<L> {
+pub struct BufferingLogger<L: Clone> {
     buffer: RefCell<Vec<(u64, L)>>,
     pushers: RefCell<Box<Fn(LoggerBatch<L>)->()>>,
 }
 
-impl<L> BufferingLogger<L> {
+impl<L: Clone> BufferingLogger<L> {
     pub fn new(pushers: Box<Fn(LoggerBatch<L>)->()>) -> Self {
         BufferingLogger {
             buffer: RefCell::new(Vec::with_capacity(BUFFERING_LOGGER_CAPACITY)),
@@ -349,7 +349,7 @@ impl<L> BufferingLogger<L> {
     }
 }
 
-impl<L> Drop for BufferingLogger<L> {
+impl<L: Clone> Drop for BufferingLogger<L> {
     fn drop(&mut self) {
         (*self.pushers.borrow_mut())(LoggerBatch::End);
     }
