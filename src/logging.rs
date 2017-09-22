@@ -72,6 +72,25 @@ impl LogManager {
     }
 }
 
+struct SharedEventWriter<T, D, W: Write> {
+    inner: Mutex<EventWriter<T, D, W>>,
+}
+
+impl<T, D, W: Write> SharedEventWriter<T, D, W> {
+    fn new(w: W) -> Self {
+        SharedEventWriter {
+            inner: Mutex::new(EventWriter::new(w)),
+        }
+    }
+}
+
+impl<T: Abomonation, D: Abomonation, W: Write> EventPusher<T, D> for SharedEventWriter<T, D, W> {
+    fn push(&self, event: Event<T, D>) {
+        let inner = self.inner.lock().expect("event pusher poisoned");
+        inner.push(event)
+    }
+}
+
 /// TODO(andreal)
 pub struct FilteredLogManager<S, E> {
     log_manager: Arc<Mutex<LogManager>>,
@@ -84,8 +103,8 @@ impl FilteredLogManager<EventsSetup, LogEvent> {
         let target: String = ::std::env::var("TIMELY_LOG_TARGET").expect("no $TIMELY_LOG_TARGET, e.g. 127.0.0.1:34254");
         let writer = BufWriter::with_capacity(4096, TcpStream::connect(target).expect("failed to connect to logging destination"));
 
-        // TODO(swicki)
-        let pusher: Arc<EventPusher<Product<RootTimestamp, u64>, (u64, LogEvent)>+Send+Sync> = unimplemented!();
+        let writer = SharedEventWriter::new(writer);
+        let pusher: Arc<EventPusher<Product<RootTimestamp, u64>, (u64, LogEvent)>+Send+Sync> = Arc::new(writer);
 
         self.log_manager.lock().unwrap().add_timely_subscription(self.filter.clone(), pusher);
     }
@@ -96,8 +115,8 @@ impl FilteredLogManager<CommsSetup, CommsEvent> {
         let comm_target = ::std::env::var("TIMELY_COMM_LOG_TARGET").expect("no $TIMELY_COMM_LOG_TARGET, e.g. 127.0.0.1:34255");
         let writer = BufWriter::with_capacity(4096, TcpStream::connect(comm_target).expect("failed to connect to logging destination"));
 
-        // TODO(swicki)
-        let pusher: Arc<EventPusher<Product<RootTimestamp, u64>, (u64, CommsEvent)>+Send+Sync> = unimplemented!();
+        let writer = SharedEventWriter::new(writer);
+        let pusher: Arc<EventPusher<Product<RootTimestamp, u64>, (u64, CommsEvent)>+Send+Sync> = Arc::new(writer);
 
         self.log_manager.lock().unwrap().add_communication_subscription(self.filter.clone(), pusher);
     }
