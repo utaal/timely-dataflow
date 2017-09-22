@@ -20,7 +20,4 @@ abomonation="0.4.4"
 byteorder="0.4.2"
 getopts="0.2.14"
 time="0.1.34"
-rmp-serde = "0.12.2"
-serde = "0.9"
-serde_derive = "0.9"
 timely_logging = { path = "../logging" }
