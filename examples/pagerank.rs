@@ -13,10 +13,15 @@ use timely::dataflow::operators::generic::Operator;
 use timely::dataflow::channels::pact::Exchange;
 use timely::logging::{LogManager, LoggerConfig};
 
+use timely::logging::LogFilter;
+
 fn main() {
 
     let mut log_manager = LogManager::new();
     let logger_config = LoggerConfig::new(&mut log_manager);
+
+    log_manager.workers().to_tcp_socket();
+    log_manager.comms().to_tcp_socket();
 
     timely::execute_from_args_logging(std::env::args().skip(3), logger_config, move |worker| {
 
