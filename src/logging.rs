@@ -81,13 +81,23 @@ pub struct FilteredLogManager<S, E> {
 
 impl FilteredLogManager<EventsSetup, LogEvent> {
     fn to_tcp_socket(&mut self, target: String) {
-        self.log_manager.lock().unwrap().add_timely_subscription(self.filter.clone(), unimplemented!());
+        let target: String = ::std::env::var("TIMELY_LOG_TARGET").expect("no $TIMELY_LOG_TARGET, e.g. 127.0.0.1:34254");
+
+        // TODO(swicki)
+        let pusher: Arc<EventPusher<Product<RootTimestamp, u64>, (u64, LogEvent)>+Send+Sync> = unimplemented!();
+
+        self.log_manager.lock().unwrap().add_timely_subscription(self.filter.clone(), pusher);
     }
 }
 
 impl FilteredLogManager<CommsSetup, CommsEvent> {
     fn to_tcp_socket(&mut self, target: String) {
-        self.log_manager.lock().unwrap().add_communication_subscription(self.filter.clone(), unimplemented!());
+        let comm_target = ::std::env::var("TIMELY_COMM_LOG_TARGET").expect("no $TIMELY_COMM_LOG_TARGET, e.g. 127.0.0.1:34254");
+
+        // TODO(swicki)
+        let pusher: Arc<EventPusher<Product<RootTimestamp, u64>, (u64, CommsEvent)>+Send+Sync> = unimplemented!();
+
+        self.log_manager.lock().unwrap().add_communication_subscription(self.filter.clone(), pusher);
     }
 }
 
