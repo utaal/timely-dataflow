@@ -50,6 +50,28 @@ pub struct LogManager {
         Vec<(Arc<Fn(&CommsSetup)->bool+Send+Sync>, Arc<EventPusher<Product<RootTimestamp, u64>, (u64, CommsEvent)>+Send+Sync>)>,
 }
 
+impl LogManager {
+    fn add_timely_subscription(&mut self,
+                               filter: Arc<Fn(&EventsSetup)->bool+Send+Sync>,
+                               pusher: Arc<EventPusher<Product<RootTimestamp, u64>, (u64, LogEvent)>+Send+Sync>) {
+
+        for (_, ref event_manager) in self.timely_logs.iter().filter(|&(ref setup, _)| filter(setup)) {
+            event_manager.lock().unwrap().event_pushers.push(pusher.clone());
+        }
+        self.timely_subscriptions.push((filter, pusher));
+    }
+
+    fn add_communication_subscription(&mut self,
+                                      filter: Arc<Fn(&CommsSetup)->bool+Send+Sync>,
+                                      pusher: Arc<EventPusher<Product<RootTimestamp, u64>, (u64, CommsEvent)>+Send+Sync>) {
+
+        for (_, ref event_manager) in self.communication_logs.iter().filter(|&(ref setup, _)| filter(setup)) {
+            event_manager.lock().unwrap().event_pushers.push(pusher.clone());
+        }
+        self.communication_subscriptions.push((filter, pusher));
+    }
+}
+
 /// TODO(andreal)
 pub struct FilteredLogManager<S, E> {
     log_manager: Arc<Mutex<LogManager>>,
@@ -59,21 +81,20 @@ pub struct FilteredLogManager<S, E> {
 
 impl FilteredLogManager<EventsSetup, LogEvent> {
     fn to_tcp_socket(&mut self, target: String) {
-        self.log_manager.lock().unwrap().timely_subscriptions.push(
-            (self.filter.clone(), unimplemented!()));
+        self.log_manager.lock().unwrap().add_timely_subscription(self.filter.clone(), unimplemented!());
     }
 }
 
 impl FilteredLogManager<CommsSetup, CommsEvent> {
     fn to_tcp_socket(&mut self, target: String) {
-        self.log_manager.lock().unwrap().communication_subscriptions.push(
-            (self.filter.clone(), unimplemented!()));
+        self.log_manager.lock().unwrap().add_communication_subscription(self.filter.clone(), unimplemented!());
     }
 }
 
 impl LogManager {
     /// TODO(andreal)
     pub fn new() -> Arc<Mutex<Self>> {
+        ::timely_logging::initialize_precise_time_ns();
         Arc::new(Mutex::new(LogManager {
             timely_logs: HashMap::new(),
             timely_subscriptions: Vec::new(),
@@ -129,7 +150,6 @@ impl LoggerConfig {
         log_manager.timely_logs.insert(events_setup, event_manager.clone());
         event_manager.lock().unwrap().event_pushers
             .extend(log_manager.timely_subscriptions.iter().filter(|&&(ref f, _)| f(&events_setup)).map(|&(_, ref p)| p.clone()));
-        // TODO(andreal) update subscriptions
         event_manager
     }
 
@@ -139,7 +159,8 @@ impl LoggerConfig {
 
         let event_manager: Arc<Mutex<EventStreamSubscriptionManager<CommsEvent>>> = Arc::new(Mutex::new(Default::default()));
         log_manager.communication_logs.insert(comms_setup, event_manager.clone());
-        // TODO(andreal) update subscriptions
+        event_manager.lock().unwrap().event_pushers
+            .extend(log_manager.communication_subscriptions.iter().filter(|&&(ref f, _)| f(&comms_setup)).map(|&(_, ref p)| p.clone()));
         event_manager
     }
 
