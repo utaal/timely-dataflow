@@ -82,6 +82,7 @@ pub struct FilteredLogManager<S, E> {
 impl FilteredLogManager<EventsSetup, LogEvent> {
     fn to_tcp_socket(&mut self, target: String) {
         let target: String = ::std::env::var("TIMELY_LOG_TARGET").expect("no $TIMELY_LOG_TARGET, e.g. 127.0.0.1:34254");
+        let writer = BufWriter::with_capacity(4096, TcpStream::connect(target).expect("failed to connect to logging destination"));
 
         // TODO(swicki)
         let pusher: Arc<EventPusher<Product<RootTimestamp, u64>, (u64, LogEvent)>+Send+Sync> = unimplemented!();
@@ -92,7 +93,8 @@ impl FilteredLogManager<EventsSetup, LogEvent> {
 
 impl FilteredLogManager<CommsSetup, CommsEvent> {
     fn to_tcp_socket(&mut self, target: String) {
-        let comm_target = ::std::env::var("TIMELY_COMM_LOG_TARGET").expect("no $TIMELY_COMM_LOG_TARGET, e.g. 127.0.0.1:34254");
+        let comm_target = ::std::env::var("TIMELY_COMM_LOG_TARGET").expect("no $TIMELY_COMM_LOG_TARGET, e.g. 127.0.0.1:34255");
+        let writer = BufWriter::with_capacity(4096, TcpStream::connect(comm_target).expect("failed to connect to logging destination"));
 
         // TODO(swicki)
         let pusher: Arc<EventPusher<Product<RootTimestamp, u64>, (u64, CommsEvent)>+Send+Sync> = unimplemented!();
