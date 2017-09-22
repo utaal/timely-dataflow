@@ -73,11 +73,23 @@ impl LogManager {
 pub trait LogFilter {
     /// TODO(andreal)
     fn workers(&mut self) -> FilteredLogManager<EventsSetup, LogEvent>;
+
+    /// TODO(andreal)
+    fn comms(&mut self) -> FilteredLogManager<CommsSetup, CommsEvent>;
 }
 
 impl LogFilter for Arc<Mutex<LogManager>> {
     /// TODO(andreal)
     #[inline] fn workers(&mut self) -> FilteredLogManager<EventsSetup, LogEvent> {
+        FilteredLogManager {
+            log_manager: self.clone(),
+            filter: Box::new(|_| true),
+            _e: ::std::marker::PhantomData,
+        }
+    }
+ 
+    /// TODO(andreal)
+    #[inline] fn comms(&mut self) -> FilteredLogManager<CommsSetup, CommsEvent> {
         FilteredLogManager {
             log_manager: self.clone(),
             filter: Box::new(|_| true),
