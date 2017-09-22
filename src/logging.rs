@@ -42,19 +42,33 @@ pub struct LogManager {
         EventsSetup,
         Arc<Mutex<EventStreamSubscriptionManager<LogEvent>>>>,
     timely_subscriptions:
-        Vec<(Box<Fn(&EventsSetup)->bool+Send+Sync>, Box<EventPusher<Product<RootTimestamp, u64>, (u64, LogEvent)>+Send+Sync>)>,
+        Vec<(Arc<Fn(&EventsSetup)->bool+Send+Sync>, Arc<EventPusher<Product<RootTimestamp, u64>, (u64, LogEvent)>+Send+Sync>)>,
     communication_logs: HashMap<
         CommsSetup,
         Arc<Mutex<EventStreamSubscriptionManager<CommsEvent>>>>,
     communication_subscriptions:
-        Vec<(Box<Fn(&EventsSetup)->bool+Send+Sync>, Box<EventPusher<Product<RootTimestamp, u64>, (u64, CommsEvent)>+Send+Sync>)>,
+        Vec<(Arc<Fn(&CommsSetup)->bool+Send+Sync>, Arc<EventPusher<Product<RootTimestamp, u64>, (u64, CommsEvent)>+Send+Sync>)>,
 }
 
 /// TODO(andreal)
 pub struct FilteredLogManager<S, E> {
     log_manager: Arc<Mutex<LogManager>>,
-    filter: Box<Fn(&S)->bool>,
+    filter: Arc<Fn(&S)->bool+Send+Sync>,
     _e: ::std::marker::PhantomData<E>,
+}
+
+impl FilteredLogManager<EventsSetup, LogEvent> {
+    fn to_tcp_socket(&mut self, target: String) {
+        self.log_manager.lock().unwrap().timely_subscriptions.push(
+            (self.filter.clone(), unimplemented!()));
+    }
+}
+
+impl FilteredLogManager<CommsSetup, CommsEvent> {
+    fn to_tcp_socket(&mut self, target: String) {
+        self.log_manager.lock().unwrap().communication_subscriptions.push(
+            (self.filter.clone(), unimplemented!()));
+    }
 }
 
 impl LogManager {
@@ -83,7 +97,7 @@ impl LogFilter for Arc<Mutex<LogManager>> {
     #[inline] fn workers(&mut self) -> FilteredLogManager<EventsSetup, LogEvent> {
         FilteredLogManager {
             log_manager: self.clone(),
-            filter: Box::new(|_| true),
+            filter: Arc::new(|_| true),
             _e: ::std::marker::PhantomData,
         }
     }
@@ -92,7 +106,7 @@ impl LogFilter for Arc<Mutex<LogManager>> {
     #[inline] fn comms(&mut self) -> FilteredLogManager<CommsSetup, CommsEvent> {
         FilteredLogManager {
             log_manager: self.clone(),
-            filter: Box::new(|_| true),
+            filter: Arc::new(|_| true),
             _e: ::std::marker::PhantomData,
         }
     }
@@ -113,6 +127,8 @@ impl LoggerConfig {
 
         let event_manager: Arc<Mutex<EventStreamSubscriptionManager<LogEvent>>> = Arc::new(Mutex::new(Default::default()));
         log_manager.timely_logs.insert(events_setup, event_manager.clone());
+        event_manager.lock().unwrap().event_pushers
+            .extend(log_manager.timely_subscriptions.iter().filter(|&&(ref f, _)| f(&events_setup)).map(|&(_, ref p)| p.clone()));
         // TODO(andreal) update subscriptions
         event_manager
     }
@@ -161,7 +177,7 @@ impl Default for LoggerConfig {
 
 struct EventStreamSubscriptionManager<E> {
     frontier: Product<RootTimestamp, u64>,
-    event_pushers: Vec<Box<EventPusher<Product<RootTimestamp, u64>, (u64, E)>+Send+Sync>>,
+    event_pushers: Vec<Arc<EventPusher<Product<RootTimestamp, u64>, (u64, E)>+Send+Sync>>,
 }
 
 impl<E> Default for EventStreamSubscriptionManager<E> {
