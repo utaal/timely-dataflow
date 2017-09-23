@@ -320,19 +320,21 @@ impl From<InputEvent> for Event {
 
 const BUFFERING_LOGGER_CAPACITY: usize = 1024;
 
-pub enum LoggerBatch<'a, L: Clone+'a> {
-    Logs(&'a Vec<(u64, L)>),
+pub enum LoggerBatch<'a, S: Clone+'a, L: Clone+'a> {
+    Logs(&'a Vec<(u64, S, L)>),
     End,
 }
 
-pub struct BufferingLogger<L: Clone> {
-    buffer: RefCell<Vec<(u64, L)>>,
-    pushers: RefCell<Box<Fn(LoggerBatch<L>)->()>>,
+pub struct BufferingLogger<S: Clone, L: Clone> {
+    setup: S,
+    buffer: RefCell<Vec<(u64, S, L)>>,
+    pushers: RefCell<Box<Fn(LoggerBatch<S, L>)->()>>,
 }
 
-impl<L: Clone> BufferingLogger<L> {
-    pub fn new(pushers: Box<Fn(LoggerBatch<L>)->()>) -> Self {
+impl<S: Clone, L: Clone> BufferingLogger<S, L> {
+    pub fn new(setup: S, pushers: Box<Fn(LoggerBatch<S, L>)->()>) -> Self {
         BufferingLogger {
+            setup: setup,
             buffer: RefCell::new(Vec::with_capacity(BUFFERING_LOGGER_CAPACITY)),
             pushers: RefCell::new(pushers),
         }
@@ -341,16 +343,20 @@ impl<L: Clone> BufferingLogger<L> {
     pub fn log(&self, l: L) {
         let ts = get_precise_time_ns();
         let mut buf = self.buffer.borrow_mut();
-        buf.push((ts, l));
+        buf.push((ts, self.setup.clone(), l));
         if buf.len() >= BUFFERING_LOGGER_CAPACITY {
             (*self.pushers.borrow_mut())(LoggerBatch::Logs(&buf));
+            buf.clear();
         }
-        buf.clear();
     }
 }
 
-impl<L: Clone> Drop for BufferingLogger<L> {
+impl<S: Clone, L: Clone> Drop for BufferingLogger<S, L> {
     fn drop(&mut self) {
+        let mut buf = self.buffer.borrow_mut();
+        if buf.len() > 0 {
+            (*self.pushers.borrow_mut())(LoggerBatch::Logs(&buf));
+        }
         (*self.pushers.borrow_mut())(LoggerBatch::End);
     }
 }
