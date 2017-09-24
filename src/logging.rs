@@ -69,8 +69,10 @@ impl LogManager {
                                       filter: Arc<Fn(&CommsSetup)->bool+Send+Sync>,
                                       pusher: Arc<EventPusher<Product<RootTimestamp, u64>, CommsMessage>+Send+Sync>) {
 
+        //eprintln!("new comm subscription");
         pusher.push(Event::Progress(vec![(Default::default(), -1)]));
-        for (_, ref event_manager) in self.communication_logs.iter().filter(|&(ref setup, _)| filter(setup)) {
+        for (ref setup, ref event_manager) in self.communication_logs.iter().filter(|&(ref setup, _)| filter(setup)) {
+            //eprintln!("  to comm logger {:?}", setup);
             event_manager.lock().unwrap().subscribe(pusher.clone());
         }
         self.communication_subscriptions.push((filter, pusher));
@@ -107,7 +109,7 @@ impl FilteredLogManager<EventsSetup, LogEvent> {
     /// TODO(andreal)
     pub fn to_tcp_socket(&mut self) {
         let target: String = ::std::env::var("TIMELY_LOG_TARGET").expect("no $TIMELY_LOG_TARGET, e.g. 127.0.0.1:34254");
-        let writer = BufWriter::with_capacity(4096, TcpStream::connect(target).expect("failed to connect to logging destination"));
+        let writer = /*BufWriter::with_capacity(4096,*/ TcpStream::connect(target).expect("failed to connect to logging destination"); //);
 
         let writer = SharedEventWriter::new(writer);
         let pusher: Arc<EventPusher<Product<RootTimestamp, u64>, LogMessage>+Send+Sync> = Arc::new(writer);
@@ -120,7 +122,7 @@ impl FilteredLogManager<CommsSetup, CommsEvent> {
     /// TODO(andreal)
     pub fn to_tcp_socket(&mut self) {
         let comm_target = ::std::env::var("TIMELY_COMM_LOG_TARGET").expect("no $TIMELY_COMM_LOG_TARGET, e.g. 127.0.0.1:34255");
-        let writer = BufWriter::with_capacity(4096, TcpStream::connect(comm_target).expect("failed to connect to logging destination"));
+        let writer = /* BufWriter::with_capacity(4096,*/ TcpStream::connect(comm_target).expect("failed to connect to logging destination"); //);
 
         let writer = SharedEventWriter::new(writer);
         let pusher: Arc<EventPusher<Product<RootTimestamp, u64>, CommsMessage>+Send+Sync> = Arc::new(writer);
@@ -213,6 +215,7 @@ impl LoggerConfig {
             timely_logging: Arc::new(move |events_setup: EventsSetup| {
                 let subscription_manager = LoggerConfig::register_timely_logger(
                     &mut timely_logging_manager.lock().unwrap(), events_setup);
+                //eprintln!("registered timely logger: {:?}", events_setup);
                 Rc::new(BufferingLogger::new(events_setup, Box::new(move |data| {
                     subscription_manager.lock().expect("cannot lock mutex").publish_batch(data);
                 })))
@@ -220,6 +223,7 @@ impl LoggerConfig {
             communication_logging: Arc::new(move |comms_setup: CommsSetup| {
                 let subscription_manager = LoggerConfig::register_comms_logger(
                     &mut communication_logging_manager.lock().unwrap(), comms_setup);
+                //eprintln!("registered comm logger: {:?}", comms_setup);
                 Rc::new(BufferingLogger::new(comms_setup, Box::new(move |data| {
                     subscription_manager.lock().expect("cannot lock mutex").publish_batch(data);
                 })))
@@ -254,11 +258,12 @@ impl<S, E> Default for EventStreamSubscriptionManager<S, E> {
 
 impl<S: Clone, E: Clone> EventStreamSubscriptionManager<S, E> {
     fn subscribe(&mut self, pusher: Arc<EventPusher<Product<RootTimestamp, u64>, (u64, S, E)>+Send+Sync>) {
+        //eprintln!("pusher subscription to logger");
         // if this logging stream is already closed
         if let Some(frontier) = self.frontier {
             pusher.push(Event::Progress(vec![(frontier, 1)]));
         } else {
-            eprintln!("subscription to closed stream");
+            eprintln!("logging: subscription to closed stream");
         }
         self.event_pushers.push(pusher);
     }
