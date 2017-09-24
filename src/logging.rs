@@ -58,9 +58,9 @@ impl LogManager {
                                filter: Arc<Fn(&EventsSetup)->bool+Send+Sync>,
                                pusher: Arc<EventPusher<Product<RootTimestamp, u64>, LogMessage>+Send+Sync>) {
 
-        eprintln!("new subscription");
+        pusher.push(Event::Progress(vec![(Default::default(), -1)]));
         for (_, ref event_manager) in self.timely_logs.iter().filter(|&(ref setup, _)| filter(setup)) {
-            event_manager.lock().unwrap().event_pushers.push(pusher.clone());
+            event_manager.lock().unwrap().subscribe(pusher.clone());
         }
         self.timely_subscriptions.push((filter, pusher));
     }
@@ -69,9 +69,9 @@ impl LogManager {
                                       filter: Arc<Fn(&CommsSetup)->bool+Send+Sync>,
                                       pusher: Arc<EventPusher<Product<RootTimestamp, u64>, CommsMessage>+Send+Sync>) {
 
-        eprintln!("new subscription");
+        pusher.push(Event::Progress(vec![(Default::default(), -1)]));
         for (_, ref event_manager) in self.communication_logs.iter().filter(|&(ref setup, _)| filter(setup)) {
-            event_manager.lock().unwrap().event_pushers.push(pusher.clone());
+            event_manager.lock().unwrap().subscribe(pusher.clone());
         }
         self.communication_subscriptions.push((filter, pusher));
     }
@@ -91,7 +91,7 @@ impl<T, D, W: Write> SharedEventWriter<T, D, W> {
 
 impl<T: Abomonation+Debug, D: Abomonation+Debug, W: Write> EventPusher<T, D> for SharedEventWriter<T, D, W> {
     fn push(&self, event: Event<T, D>) {
-        let inner = self.inner.lock().expect("event pusher poisoned");
+        let mut inner = self.inner.lock().expect("event pusher poisoned");
         inner.push(event)
     }
 }
@@ -184,11 +184,11 @@ impl LoggerConfig {
         log_manager: &mut LogManager,
         events_setup: EventsSetup) -> Arc<Mutex<EventStreamSubscriptionManager<EventsSetup, LogEvent>>> {
 
-        eprintln!("new registration");
         let event_manager: Arc<Mutex<EventStreamSubscriptionManager<EventsSetup, LogEvent>>> = Arc::new(Mutex::new(Default::default()));
         log_manager.timely_logs.insert(events_setup, event_manager.clone());
-        event_manager.lock().unwrap().event_pushers
-            .extend(log_manager.timely_subscriptions.iter().filter(|&&(ref f, _)| f(&events_setup)).map(|&(_, ref p)| p.clone()));
+        for pusher in log_manager.timely_subscriptions.iter().filter(|&&(ref f, _)| f(&events_setup)).map(|&(_, ref p)| p.clone()) {
+            event_manager.lock().unwrap().subscribe(pusher);
+        }
         println!("pushers: {}", event_manager.lock().unwrap().event_pushers.len());
         event_manager
     }
@@ -197,11 +197,11 @@ impl LoggerConfig {
         log_manager: &mut LogManager,
         comms_setup: CommsSetup) -> Arc<Mutex<EventStreamSubscriptionManager<CommsSetup, CommsEvent>>> {
 
-        eprintln!("new registration");
         let event_manager: Arc<Mutex<EventStreamSubscriptionManager<CommsSetup, CommsEvent>>> = Arc::new(Mutex::new(Default::default()));
         log_manager.communication_logs.insert(comms_setup, event_manager.clone());
-        event_manager.lock().unwrap().event_pushers
-            .extend(log_manager.communication_subscriptions.iter().filter(|&&(ref f, _)| f(&comms_setup)).map(|&(_, ref p)| p.clone()));
+        for pusher in log_manager.communication_subscriptions.iter().filter(|&&(ref f, _)| f(&comms_setup)).map(|&(_, ref p)| p.clone()) {
+            event_manager.lock().unwrap().subscribe(pusher);
+        }
         event_manager
     }
 
@@ -214,9 +214,7 @@ impl LoggerConfig {
                 let subscription_manager = LoggerConfig::register_timely_logger(
                     &mut timely_logging_manager.lock().unwrap(), events_setup);
                 Rc::new(BufferingLogger::new(events_setup, Box::new(move |data| {
-                    eprintln!("publishing");
                     subscription_manager.lock().expect("cannot lock mutex").publish_batch(data);
-                    eprintln!("published");
                 })))
             }),
             communication_logging: Arc::new(move |comms_setup: CommsSetup| {
@@ -240,34 +238,48 @@ impl Default for LoggerConfig {
 }
 
 struct EventStreamSubscriptionManager<S, E> {
-    frontier: Product<RootTimestamp, u64>,
+    // None when the logging stream is closed
+    frontier: Option<Product<RootTimestamp, u64>>,
     event_pushers: Vec<Arc<EventPusher<Product<RootTimestamp, u64>, (u64, S, E)>+Send+Sync>>,
 }
 
 impl<S, E> Default for EventStreamSubscriptionManager<S, E> {
     fn default() -> Self {
         EventStreamSubscriptionManager {
-            frontier: Default::default(),
+            frontier: Some(Default::default()),
             event_pushers: Vec::new(),
         }
     }
 }
 
 impl<S: Clone, E: Clone> EventStreamSubscriptionManager<S, E> {
+    fn subscribe(&mut self, pusher: Arc<EventPusher<Product<RootTimestamp, u64>, (u64, S, E)>+Send+Sync>) {
+        // if this logging stream is already closed
+        if let Some(frontier) = self.frontier {
+            pusher.push(Event::Progress(vec![(frontier, 1)]));
+        } else {
+            eprintln!("subscription to closed stream");
+        }
+        self.event_pushers.push(pusher);
+    }
+
     pub fn publish_batch(&mut self, logger_batch: LoggerBatch<S, E>) -> () {
-        for pusher in self.event_pushers.iter_mut() {
+        for pusher in (&mut self.event_pushers).iter_mut() {
             match logger_batch {
                 LoggerBatch::Logs(evs) => {
-                    eprintln!("pushing batch");
-                    pusher.push(Event::Messages(self.frontier, evs.clone()));
-                    let &(last_ts, _, _) = evs.last().unwrap();
-                    let new_frontier = RootTimestamp::new(last_ts);
-                    pusher.push(Event::Progress(vec![(new_frontier, 1), (self.frontier, -1)]));
-                    self.frontier = new_frontier;
+                    if let Some(frontier) = self.frontier {
+                        pusher.push(Event::Messages(frontier, evs.clone()));
+                        let &(last_ts, _, _) = evs.last().unwrap();
+                        let new_frontier = RootTimestamp::new(last_ts);
+                        pusher.push(Event::Progress(vec![(new_frontier, 1), (frontier, -1)]));
+                        self.frontier = Some(new_frontier);
+                    }
                 },
                 LoggerBatch::End => {
-                    eprintln!("pushing End");
-                    pusher.push(Event::Progress(vec![(self.frontier, -1)]));
+                    if let Some(frontier) = self.frontier {
+                        pusher.push(Event::Progress(vec![(frontier, -1)]));
+                        self.frontier = None;
+                    }
                 },
             }
         }

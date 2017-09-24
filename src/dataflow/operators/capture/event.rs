@@ -9,8 +9,6 @@ use abomonation::Abomonation;
 /// Data and progress events of the captured stream.
 #[derive(Debug)]
 pub enum Event<T, D> {
-    /// An initial marker, used only to start the linked list implementation.
-    Start,
     /// Progress received via `push_external_progress`.
     Progress(Vec<(T, i64)>),
     /// Messages received via the data stream.
@@ -34,7 +32,6 @@ impl<T: Abomonation, D: Abomonation> Abomonation for Event<T,D> {
                 let temp = bytes; bytes = if let Some(bytes) = data.exhume(temp) { bytes } else { return None; };
                 Some(bytes)
             }
-            Event::Start => Some(bytes),
         }
     }
 }
@@ -63,73 +60,13 @@ impl<T, D> EventPusher<T, D> for ::std::sync::mpsc::Sender<Event<T, D>> {
     }
 }
 
-/// TODO(andreal)
-pub struct BlackholeEventPusher { }
-
-impl<T, D> EventPusher<T, D> for BlackholeEventPusher {
-    fn push(&self, event: Event<T, D>) {
-        // no-op
-    }
-}
-
-/// A linked-list event pusher and iterator.
-pub mod link {
-
-    use std::rc::Rc;
-    use std::cell::RefCell;
-
-    use super::{Event, EventPusher, EventIterator};
-
-    /// A linked list of Event<T, D>.
-    pub struct EventLink<T, D> {
-        /// An event.
-        pub event: Event<T, D>,
-        /// The next event, if it exists.
-        pub next: RefCell<Option<Rc<EventLink<T, D>>>>,
-    }
-
-    impl<T, D> EventLink<T, D> { 
-        /// Allocates a new `EventLink`.
-        /// 
-        /// This could be improved with the knowledge that the first event should always be a frontier(default).
-        /// We could, in principle, remove the `Event::Start` event, and thereby no longer have to explain it.
-        pub fn new() -> EventLink<T, D> { 
-            EventLink { event: Event::Start, next: RefCell::new(None) }
-        }
-    }
-
-    // implementation for the linked list behind a `Handle`.
-    impl<T, D> EventPusher<T, D> for RefCell<Rc<EventLink<T, D>>> {
-        fn push(&self, event: Event<T, D>) {
-            let mut this = self.borrow_mut();
-            *this.next.borrow_mut() = Some(Rc::new(EventLink { event: event, next: RefCell::new(None) }));
-            let next = this.next.borrow().as_ref().unwrap().clone();
-            *this = next;
-        }
-    }
-
-    impl<T, D> EventIterator<T, D> for Rc<EventLink<T, D>> {
-        fn next(&mut self) -> Option<&Event<T, D>> {
-            let is_some = self.next.borrow().is_some();
-            if is_some {
-                let next = self.next.borrow().as_ref().unwrap().clone();
-                *self = next;
-                Some(&self.event)
-            }
-            else {
-                None
-            }
-        }
-    }
-}
-
 /// A binary event pusher and iterator.
 pub mod binary {
 
-    use std::cell::RefCell;
     use std::io::Write;
     use abomonation::Abomonation;
     use super::{Event, EventPusher, EventIterator};
+    use std::cell::RefCell;
 
     /// A wrapper for `W: Write` implementing `EventPusher<T, D>`.
     pub struct EventWriter<T, D, W: ::std::io::Write> {
@@ -151,9 +88,10 @@ pub mod binary {
 
     impl<T: Abomonation, D: Abomonation, W: ::std::io::Write> EventPusher<T, D> for EventWriter<T, D, W> {
         fn push(&self, event: Event<T, D>) {
-            unsafe { ::abomonation::encode(&event, &mut self.buffer.borrow_mut()); }
-            self.stream.borrow_mut().write_all(&self.buffer.borrow()[..]).unwrap();
-            self.buffer.borrow_mut().clear();
+            let mut buffer = self.buffer.borrow_mut();
+            unsafe { ::abomonation::encode(&event, &mut buffer); }
+            self.stream.borrow_mut().write_all(&buffer[..]).unwrap();
+            buffer.clear();
         }
     }
 
@@ -191,6 +129,8 @@ pub mod binary {
                 let (item, rest) = unsafe { ::abomonation::decode::<Event<T,D>>(&mut self.buff1[self.consumed..]) }.unwrap();
                 self.consumed = self.valid - rest.len();
                 return Some(item);
+            } else {
+                eprintln!("cannot read: {:?}", self.buff1.len());
             }
             // if we exhaust data we should shift back (if any shifting to do)
             if self.consumed > 0 {
