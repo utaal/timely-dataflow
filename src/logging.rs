@@ -79,6 +79,29 @@ impl LogManager {
     }
 }
 
+struct SharedVec {
+    inner: Arc<Mutex<Vec<u8>>>,
+}
+
+impl SharedVec {
+    pub fn new(inner: Arc<Mutex<Vec<u8>>>) -> Self {
+        SharedVec { 
+            inner: inner,
+        }
+    }
+}
+
+impl Write for SharedVec {
+    fn write(&mut self, data: &[u8]) -> Result<usize, ::std::io::Error> {
+        self.inner.lock().unwrap().extend_from_slice(data);
+        Ok(data.len())
+    }
+
+    fn flush(&mut self) -> Result<(), ::std::io::Error> {
+        Ok(())
+    }
+}
+
 struct SharedEventWriter<T, D, W: Write> {
     inner: Mutex<EventWriter<T, D, W>>,
 }
@@ -115,6 +138,21 @@ impl FilteredLogManager<EventsSetup, LogEvent> {
         let pusher: Arc<EventPusher<Product<RootTimestamp, u64>, LogMessage>+Send+Sync> = Arc::new(writer);
 
         self.log_manager.lock().unwrap().add_timely_subscription(self.filter.clone(), pusher);
+    }
+
+    /// TODO(andreal)
+    pub fn to_bufs(&mut self) -> Vec<Arc<Mutex<Vec<u8>>>> {
+        let mut vecs = Vec::new();
+
+        for i in 0..4 {
+            let buf = Arc::new(Mutex::new(Vec::<u8>::with_capacity(4_000_000_000)));
+            let writer = SharedEventWriter::new(SharedVec::new(buf.clone()));
+            let pusher: Arc<EventPusher<Product<RootTimestamp, u64>, LogMessage>+Send+Sync> = Arc::new(writer);
+            self.log_manager.lock().unwrap().add_timely_subscription(Arc::new(move |s| s.index == i), pusher);
+            vecs.push(buf);
+        }
+
+        vecs
     }
 }
 

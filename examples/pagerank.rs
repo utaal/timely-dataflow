@@ -15,13 +15,25 @@ use timely::logging::{LogManager, LoggerConfig};
 
 use timely::logging::LogFilter;
 
+fn ridiculous_shuffle(from: u64) -> u64 {
+    from
+//    if from % 16 < 8 {
+//        0
+//    } else {
+//        (from % 16) - 7
+//    }
+}
+
 fn main() {
 
     let mut log_manager = LogManager::new();
     let logger_config = LoggerConfig::new(&mut log_manager);
 
-    log_manager.workers().to_tcp_socket();
-    log_manager.comms().to_tcp_socket();
+    let start = time::precise_time_ns();
+
+    // let buf: Option<::std::sync::Arc<::std::sync::Mutex<Vec<u8>>>> = None;
+    let buf: Option<Vec<::std::sync::Arc<::std::sync::Mutex<Vec<u8>>>>> = Some(log_manager.workers().to_bufs());
+    // log_manager.workers().to_tcp_socket();
 
     timely::execute_from_args_logging(std::env::args().skip(3), logger_config, move |worker| {
 
@@ -39,8 +51,8 @@ fn main() {
             // bring edges and ranks together!
             let changes = edge_stream.binary_frontier(
                 &rank_stream, 
-                Exchange::new(|x: &((usize, usize), i64)| (x.0).0 as u64),
-                Exchange::new(|x: &(usize, i64)| x.0 as u64),
+                Exchange::new(|x: &((usize, usize), i64)| ridiculous_shuffle((x.0).0 as u64)),
+                Exchange::new(|x: &(usize, i64)| ridiculous_shuffle(x.0 as u64)),
                 "PageRank",
                 |_capability| {
 
@@ -175,6 +187,7 @@ fn main() {
             worker.step();
         }
 
+        let mut prev_time = time::precise_time_ns();
         for i in 1 .. 1000 {
             input.send(((rng1.gen_range(0, nodes), rng1.gen_range(0, nodes)), 1));
             input.send(((rng2.gen_range(0, nodes), rng2.gen_range(0, nodes)), -1));
@@ -182,35 +195,56 @@ fn main() {
             while probe.less_than(input.time()) {
                 worker.step();
             }
+            // eprintln!("EPOCH TIME {}", (time::precise_time_ns() - prev_time) as f64 / 1_000_000_000f64);
+            prev_time = time::precise_time_ns();
         }
 
     }).unwrap(); // asserts error-free execution;
-}
 
-fn compact<T: Ord>(list: &mut Vec<(T, i64)>) {
-    if list.len() > 0 {
-        list.sort_by(|x,y| x.0.cmp(&y.0));
-        for i in 0 .. list.len() - 1 {
-            if list[i].0 == list[i+1].0 {
-                list[i+1].1 += list[i].1;
-                list[i].1 = 0;
+    eprintln!("duration: {} sec", (time::precise_time_ns() - start) as f64 / 1_000_000_000f64);
+    if let Some(buf) = buf {
+        eprintln!("computation done, writing to socket");
+            use std::io::Write;
+            //let mut file = ::std::fs::File::create("log.out").expect("cannot create logging file");
+            let mut threads = Vec::new();
+            for v in buf.into_iter() {
+                threads.push(std::thread::spawn(move || {
+                    let target: String = ::std::env::var("TIMELY_LOG_TARGET").expect("no $TIMELY_LOG_TARGET, e.g. 127.0.0.1:34254");
+                    let mut writer = std::io::BufWriter::with_capacity(4096, std::net::TcpStream::connect(target).expect("failed to connect to logging destination"));
+                    eprintln!("buf len: {}", v.lock().unwrap().len());
+                    writer.write(&(*v.lock().unwrap())[..]).expect("ABASDF");
+                }));
+            }
+            for t in threads.into_iter() {
+                t.join().unwrap();
             }
         }
-        list.retain(|x| x.1 != 0);
-    } 
-}
+    }
 
-// this method allocates some rank between elements of `edges`.
-fn allocate(rank: i64, edges: &[(usize, i64)], send: &mut Vec<(usize, i64)>) {
-    if edges.len() > 0 {
-        assert!(rank >= 0);
-        assert!(edges.iter().all(|x| x.1 > 0));
+    fn compact<T: Ord>(list: &mut Vec<(T, i64)>) {
+        if list.len() > 0 {
+            list.sort_by(|x,y| x.0.cmp(&y.0));
+            for i in 0 .. list.len() - 1 {
+                if list[i].0 == list[i+1].0 {
+                    list[i+1].1 += list[i].1;
+                    list[i].1 = 0;
+                }
+            }
+            list.retain(|x| x.1 != 0);
+        } 
+    }
 
-        let degree: i64 = edges.iter().map(|x| x.1 as i64).sum();
-        let share = ((rank * 5) / 6) / degree;
-        for i in 0 .. edges.len() {
-            if (i as i64) < (share % (edges.len() as i64)) {
-                send.push((edges[i].0, edges[i].1 * (share + 1)));
+    // this method allocates some rank between elements of `edges`.
+    fn allocate(rank: i64, edges: &[(usize, i64)], send: &mut Vec<(usize, i64)>) {
+        if edges.len() > 0 {
+            assert!(rank >= 0);
+            assert!(edges.iter().all(|x| x.1 > 0));
+
+            let degree: i64 = edges.iter().map(|x| x.1 as i64).sum();
+            let share = ((rank * 5) / 6) / degree;
+            for i in 0 .. edges.len() {
+                if (i as i64) < (share % (edges.len() as i64)) {
+                    send.push((edges[i].0, edges[i].1 * (share + 1)));
             }
             else {
                 send.push((edges[i].0, edges[i].1 * share));
