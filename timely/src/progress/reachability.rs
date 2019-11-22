@@ -394,6 +394,9 @@ pub struct Tracker<T:Timestamp> {
     /// always be exactly equal to the sum across all operators of the frontier sizes
     /// of the target and source `pointstamps` member.
     total_counts: i64,
+
+    /// A timely logging handle for reachability computation
+    pub tracker_logger: Option<crate::logging::Logger<TrackerEvent>>,
 }
 
 /// Target and source information for each operator.
@@ -535,9 +538,41 @@ impl<T:Timestamp> Tracker<T> {
             pushed_changes: ChangeBatch::new(),
             output_changes,
             total_counts: 0,
+            tracker_logger: None,
         };
 
         (tracker, builder_summary)
+    }
+
+    #[inline(always)]
+    fn print_trace(&self, logger: &crate::logging::Logger<TrackerEvent>) {
+        let ports = self.per_operator.iter().enumerate().flat_map(|(op_n, per_op)| {
+            let mut ports = per_op.targets.iter().enumerate().map(|(tg_n, target)| {
+                TrackerEventPort {
+                    location: Location {
+                        node: op_n,
+                        port: Port::Target(tg_n),
+                    },
+                    pointstamps: target.pointstamps.updates().iter().map(|x| format!("{:?}", x)).collect(),
+                    implications: target.implications.updates().iter().map(|x| format!("{:?}", x)).collect(),
+                }
+            }).collect::<Vec<_>>();
+            ports.extend(per_op.sources.iter().enumerate().map(|(tg_n, source)| {
+                TrackerEventPort {
+                    location: Location {
+                        node: op_n,
+                        port: Port::Target(tg_n),
+                    },
+                    pointstamps: source.pointstamps.updates().iter().map(|x| format!("{:?}", x)).collect(),
+                    implications: source.implications.updates().iter().map(|x| format!("{:?}", x)).collect(),
+                }
+            }));
+            ports.into_iter()
+        }).collect::<Vec<_>>();
+        logger.log(TrackerEvent {
+            ports,
+            worklist: self.worklist.iter().map(|Reverse((t,loc,d))| (format!("{:?}", t),loc.clone(),*d)).collect(),
+        });
     }
 
     /// Propagates all pending updates.
@@ -653,6 +688,11 @@ impl<T:Timestamp> Tracker<T> {
                     },
                 };
             }
+
+        }
+
+        if let Some(logger) = self.tracker_logger.as_ref() {
+            self.print_trace(logger);
         }
     }
 
@@ -774,4 +814,19 @@ fn summarize_outputs<T: Timestamp>(
     }
 
     results
+}
+
+/// Port information in a tracker log event
+#[derive(Abomonation, Debug, Clone)]
+pub struct TrackerEventPort {
+    location: Location,
+    pointstamps: Vec<String>,
+    implications: Vec<String>,
+}
+
+/// Log event
+#[derive(Abomonation, Debug, Clone)]
+pub struct TrackerEvent {
+    ports: Vec<TrackerEventPort>,
+    worklist: Vec<(String, Location, i64)>,
 }
