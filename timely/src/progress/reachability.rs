@@ -74,6 +74,8 @@
 
 use std::collections::{BinaryHeap, HashMap, VecDeque};
 use std::cmp::Reverse;
+use log::trace;
+use fomat_macros::fomat;
 
 use crate::progress::Timestamp;
 use crate::progress::{Source, Target};
@@ -521,11 +523,57 @@ impl<T:Timestamp> Tracker<T> {
         (tracker, builder_summary)
     }
 
+    fn print_trace(&self) {
+        // let worklist = self.worklist.into_vec();
+
+        let targets = fomat!(
+            for (operator, per_op) in self.per_operator.iter().enumerate() {
+                for (port, op) in per_op.targets.iter().enumerate() {
+                    { "{}",
+                        format!("Target({} {})\tpointstamps {:?}\timplications {:?}\tworklist {:?}",
+                                operator, port,
+                                op.pointstamps.updates(),
+                                op.implications.updates(),
+                                self.worklist
+                                        .iter()
+                                        .filter(|x| (x.0).1 ==
+                                            Location { node: operator, port: Port::Target(port) })
+                                        .map(|x| ((x.0).0.clone(), (x.0).2))
+                                        .collect::<Vec<(T, i64)>>())
+                    }
+                    "\n"
+                }
+            }
+            );
+        let sources = fomat!(
+            for (operator, per_op) in self.per_operator.iter().enumerate() {
+                for (port, op) in per_op.sources.iter().enumerate() {
+                    { "{}",
+                        format!("Source({} {})\tpointstamps {:?}\timplications {:?}\tworklist {:?}",
+                                operator, port,
+                                op.pointstamps.updates(),
+                                op.implications.updates(),
+                                self.worklist
+                                        .iter()
+                                        .filter(|x| (x.0).1 ==
+                                            Location { node: operator, port: Port::Source(port) })
+                                        .map(|x| ((x.0).0.clone(), (x.0).2))
+                                        .collect::<Vec<(T, i64)>>())
+                    }
+                    "\n"
+                }
+            }
+            );
+        trace!("Progress state\n{}{}", targets, sources);
+    }
+
     /// Propagates all pending updates.
     ///
     /// The method drains `self.input_changes` and circulates their implications
     /// until we cease deriving new implications.
     pub fn propagate_all(&mut self) {
+
+        self.print_trace();
 
         // Step 1: Drain `self.input_changes` and determine actual frontier changes.
         //
@@ -570,6 +618,8 @@ impl<T:Timestamp> Tracker<T> {
                 self.worklist.push(Reverse((time, Location::from(source), diff)));
             }
         }
+
+        self.print_trace();
 
         // Step 2: Circulate implications of changes to `self.pointstamps`.
         //
@@ -634,6 +684,7 @@ impl<T:Timestamp> Tracker<T> {
                     },
                 };
             }
+            self.print_trace();
         }
     }
 
