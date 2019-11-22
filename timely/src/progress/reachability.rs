@@ -530,16 +530,16 @@ impl<T:Timestamp> Tracker<T> {
             for (operator, per_op) in self.per_operator.iter().enumerate() {
                 for (port, op) in per_op.targets.iter().enumerate() {
                     { "{}",
-                        format!("Target({} {})\tpointstamps {:?}\timplications {:?}\tworklist {:?}",
+                        format!("Target({} {})\tpointstamps {:<20}\timplications {:<20}\tworklist {:<20}",
                                 operator, port,
-                                op.pointstamps.updates(),
-                                op.implications.updates(),
-                                self.worklist
+                                format!("{:?}", op.pointstamps.updates()),
+                                format!("{:?}", op.implications.updates()),
+                                format!("{:?}", self.worklist
                                         .iter()
                                         .filter(|x| (x.0).1 ==
                                             Location { node: operator, port: Port::Target(port) })
                                         .map(|x| ((x.0).0.clone(), (x.0).2))
-                                        .collect::<Vec<(T, i64)>>())
+                                        .collect::<Vec<(T, i64)>>()))
                     }
                     "\n"
                 }
@@ -549,16 +549,16 @@ impl<T:Timestamp> Tracker<T> {
             for (operator, per_op) in self.per_operator.iter().enumerate() {
                 for (port, op) in per_op.sources.iter().enumerate() {
                     { "{}",
-                        format!("Source({} {})\tpointstamps {:?}\timplications {:?}\tworklist {:?}",
+                        format!("Source({} {})\tpointstamps {:<20}\timplications {:<20}\tworklist {:<20}",
                                 operator, port,
-                                op.pointstamps.updates(),
-                                op.implications.updates(),
-                                self.worklist
+                                format!("{:?}", op.pointstamps.updates()),
+                                format!("{:?}", op.implications.updates()),
+                                format!("{:?}", self.worklist
                                         .iter()
                                         .filter(|x| (x.0).1 ==
                                             Location { node: operator, port: Port::Source(port) })
                                         .map(|x| ((x.0).0.clone(), (x.0).2))
-                                        .collect::<Vec<(T, i64)>>())
+                                        .collect::<Vec<(T, i64)>>()))
                     }
                     "\n"
                 }

@@ -1,8 +1,6 @@
 extern crate timely;
 extern crate log;
 
-use log::Level;
-
 use timely::progress::frontier::Antichain;
 use timely::progress::{Source, Target};
 use timely::progress::reachability::Builder;
