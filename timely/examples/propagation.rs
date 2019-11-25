@@ -1,16 +1,10 @@
 extern crate timely;
-extern crate log;
 
 use timely::progress::frontier::Antichain;
 use timely::progress::{Source, Target};
 use timely::progress::reachability::Builder;
 
 fn main() {
-    env_logger::builder()
-        .format_timestamp(None)
-        .format_module_path(false)
-        .init();
-
     // allocate a new empty topology builder.
     let mut builder = Builder::<usize>::new();
 

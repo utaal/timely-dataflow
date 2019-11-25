@@ -74,7 +74,6 @@
 
 use std::collections::{BinaryHeap, HashMap, VecDeque};
 use std::cmp::Reverse;
-use log::trace;
 use fomat_macros::fomat;
 
 use crate::progress::Timestamp;
@@ -524,7 +523,9 @@ impl<T:Timestamp> Tracker<T> {
     }
 
     fn print_trace(&self) {
-        // let worklist = self.worklist.into_vec();
+        if let Err(_) = std::env::var("TRACE_TRACKER") {
+            return
+        }
 
         let targets = fomat!(
             for (operator, per_op) in self.per_operator.iter().enumerate() {
@@ -564,7 +565,7 @@ impl<T:Timestamp> Tracker<T> {
                 }
             }
             );
-        trace!("Progress state\n{}{}", targets, sources);
+        eprintln!("TRACE: progress state\n{}{}", targets, sources);
     }
 
     /// Propagates all pending updates.
