@@ -165,7 +165,8 @@ where
             builder.add_edge(source, target);
         }
 
-        let (tracker, scope_summary) = builder.build();
+        let (mut tracker, scope_summary) = builder.build();
+        tracker.tracker_logger = worker.log_register().get("timely/tracker");
 
         let progcaster = Progcaster::new(worker, &self.path, self.logging.clone());
 

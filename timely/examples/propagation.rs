@@ -21,6 +21,14 @@ fn main() {
     // Construct a reachability tracker.
     let (mut tracker, _) = builder.build();
 
+    let logger = timely::logging::Logger::<timely::progress::reachability::TrackerEvent>::new(
+        std::time::Instant::now(), 0, |_since, events| {
+            for event in events {
+                eprintln!("{:?}", event);
+            }
+        });
+    tracker.tracker_logger = Some(logger);
+
     // Introduce a pointstamp at the output of the first node.
     tracker.update_source(Source::new(0, 0), 17, 1);
 

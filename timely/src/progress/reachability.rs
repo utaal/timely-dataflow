@@ -74,7 +74,6 @@
 
 use std::collections::{BinaryHeap, HashMap, VecDeque};
 use std::cmp::Reverse;
-use fomat_macros::fomat;
 
 use crate::progress::Timestamp;
 use crate::progress::{Source, Target};
@@ -376,6 +375,9 @@ pub struct Tracker<T:Timestamp> {
     /// always be exactly equal to the sum across all operators of the frontier sizes
     /// of the target and source `pointstamps` member.
     total_counts: i64,
+
+    /// A timely logging handle for reachability computation
+    pub tracker_logger: Option<crate::logging::Logger<TrackerEvent>>,
 }
 
 /// Target and source information for each operator.
@@ -517,55 +519,41 @@ impl<T:Timestamp> Tracker<T> {
             pushed_changes: ChangeBatch::new(),
             output_changes,
             total_counts: 0,
+            tracker_logger: None,
         };
 
         (tracker, builder_summary)
     }
 
-    fn print_trace(&self) {
-        if let Err(_) = std::env::var("TRACE_TRACKER") {
-            return
-        }
-
-        let targets = fomat!(
-            for (operator, per_op) in self.per_operator.iter().enumerate() {
-                for (port, op) in per_op.targets.iter().enumerate() {
-                    { "{}",
-                        format!("Target({} {})\tpointstamps {:<20}\timplications {:<20}\tworklist {:<20}",
-                                operator, port,
-                                format!("{:?}", op.pointstamps.updates()),
-                                format!("{:?}", op.implications.updates()),
-                                format!("{:?}", self.worklist
-                                        .iter()
-                                        .filter(|x| (x.0).1 ==
-                                            Location { node: operator, port: Port::Target(port) })
-                                        .map(|x| ((x.0).0.clone(), (x.0).2))
-                                        .collect::<Vec<(T, i64)>>()))
-                    }
-                    "\n"
+    #[inline(always)]
+    fn print_trace(&self, logger: &crate::logging::Logger<TrackerEvent>) {
+        let ports = self.per_operator.iter().enumerate().flat_map(|(op_n, per_op)| {
+            let mut ports = per_op.targets.iter().enumerate().map(|(tg_n, target)| {
+                TrackerEventPort {
+                    location: Location {
+                        node: op_n,
+                        port: Port::Target(tg_n),
+                    },
+                    pointstamps: target.pointstamps.updates().iter().map(|x| format!("{:?}", x)).collect(),
+                    implications: target.implications.updates().iter().map(|x| format!("{:?}", x)).collect(),
                 }
-            }
-            );
-        let sources = fomat!(
-            for (operator, per_op) in self.per_operator.iter().enumerate() {
-                for (port, op) in per_op.sources.iter().enumerate() {
-                    { "{}",
-                        format!("Source({} {})\tpointstamps {:<20}\timplications {:<20}\tworklist {:<20}",
-                                operator, port,
-                                format!("{:?}", op.pointstamps.updates()),
-                                format!("{:?}", op.implications.updates()),
-                                format!("{:?}", self.worklist
-                                        .iter()
-                                        .filter(|x| (x.0).1 ==
-                                            Location { node: operator, port: Port::Source(port) })
-                                        .map(|x| ((x.0).0.clone(), (x.0).2))
-                                        .collect::<Vec<(T, i64)>>()))
-                    }
-                    "\n"
+            }).collect::<Vec<_>>();
+            ports.extend(per_op.sources.iter().enumerate().map(|(tg_n, source)| {
+                TrackerEventPort {
+                    location: Location {
+                        node: op_n,
+                        port: Port::Target(tg_n),
+                    },
+                    pointstamps: source.pointstamps.updates().iter().map(|x| format!("{:?}", x)).collect(),
+                    implications: source.implications.updates().iter().map(|x| format!("{:?}", x)).collect(),
                 }
-            }
-            );
-        eprintln!("TRACE: progress state\n{}{}", targets, sources);
+            }));
+            ports.into_iter()
+        }).collect::<Vec<_>>();
+        logger.log(TrackerEvent {
+            ports,
+            worklist: self.worklist.iter().map(|Reverse((t,loc,d))| (format!("{:?}", t),loc.clone(),*d)).collect(),
+        });
     }
 
     /// Propagates all pending updates.
@@ -573,8 +561,6 @@ impl<T:Timestamp> Tracker<T> {
     /// The method drains `self.input_changes` and circulates their implications
     /// until we cease deriving new implications.
     pub fn propagate_all(&mut self) {
-
-        self.print_trace();
 
         // Step 1: Drain `self.input_changes` and determine actual frontier changes.
         //
@@ -619,8 +605,6 @@ impl<T:Timestamp> Tracker<T> {
                 self.worklist.push(Reverse((time, Location::from(source), diff)));
             }
         }
-
-        self.print_trace();
 
         // Step 2: Circulate implications of changes to `self.pointstamps`.
         //
@@ -685,7 +669,11 @@ impl<T:Timestamp> Tracker<T> {
                     },
                 };
             }
-            self.print_trace();
+
+        }
+
+        if let Some(logger) = self.tracker_logger.as_ref() {
+            self.print_trace(logger);
         }
     }
 
@@ -807,4 +795,19 @@ fn summarize_outputs<T: Timestamp>(
     }
 
     results
+}
+
+/// Port information in a tracker log event
+#[derive(Abomonation, Debug, Clone)]
+pub struct TrackerEventPort {
+    location: Location,
+    pointstamps: Vec<String>,
+    implications: Vec<String>,
+}
+
+/// Log event
+#[derive(Abomonation, Debug, Clone)]
+pub struct TrackerEvent {
+    ports: Vec<TrackerEventPort>,
+    worklist: Vec<(String, Location, i64)>,
 }

@@ -23,7 +23,6 @@ serde = "1.0"
 serde_derive = "1.0"
 abomonation = "0.7.3"
 abomonation_derive = "0.3"
-fomat-macros = "0.3.1"
 timely_bytes = { path = "../bytes", version = "0.10" }
 timely_logging = { path = "../logging", version = "0.10" }
 timely_communication = { path = "../communication", version = "0.10" }
