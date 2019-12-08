@@ -689,11 +689,12 @@ impl<T:Timestamp> Tracker<T> {
                 };
             }
 
+            if let Some(logger) = self.tracker_logger.as_ref() {
+                self.print_trace(logger);
+            }
+
         }
 
-        if let Some(logger) = self.tracker_logger.as_ref() {
-            self.print_trace(logger);
-        }
     }
 
     /// Implications of maintained capabilities projected to each output.

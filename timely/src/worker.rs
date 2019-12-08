@@ -422,6 +422,8 @@ impl<A: Allocate> Worker<A> {
         logging.as_mut().map(|l| l.log(crate::logging::OperatesEvent {
             id: identifier,
             addr: operator.path().to_vec(),
+            internal_summaries: operator.get_internal_structure()
+                .iter().map(|x| x.iter().map(|x| format!("{:?}", x.elements())).collect()).collect(),
             name: operator.name().to_string(),
         }));
 

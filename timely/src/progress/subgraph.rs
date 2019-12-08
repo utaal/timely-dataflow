@@ -129,6 +129,8 @@ where
             self.logging.as_mut().map(|l| l.log(crate::logging::OperatesEvent {
                 id: identifier,
                 addr: child_path,
+                internal_summaries: child.get_internal_structure().iter()
+                    .map(|x| x.iter().map(|x| format!("{:?}", x.elements())).collect()).collect(),
                 name: child.name().to_owned(),
             }));
         }
@@ -508,14 +510,8 @@ where
     fn inputs(&self)  -> usize { self.inputs }
     fn outputs(&self) -> usize { self.outputs }
 
-    // produces connectivity summaries from inputs to outputs, and reports initial internal
-    // capabilities on each of the outputs (projecting capabilities from contained scopes).
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<TOuter::Summary>>>, Rc<RefCell<SharedProgress<TOuter>>>) {
 
-        // double-check that child 0 (the outside world) is correctly shaped.
-        assert_eq!(self.children[0].outputs, self.inputs());
-        assert_eq!(self.children[0].inputs, self.outputs());
-
+    fn get_internal_structure(&self) -> Vec<Vec<Antichain<TOuter::Summary>>> {
         let mut internal_summary = vec![vec![Antichain::new(); self.outputs()]; self.inputs()];
         for input in 0 .. self.scope_summary.len() {
             for output in 0 .. self.scope_summary[input].len() {
@@ -524,6 +520,17 @@ where
                 }
             }
         }
+
+        internal_summary
+    }
+
+    // produces connectivity summaries from inputs to outputs, and reports initial internal
+    // capabilities on each of the outputs (projecting capabilities from contained scopes).
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<TOuter::Summary>>>, Rc<RefCell<SharedProgress<TOuter>>>) {
+
+        // double-check that child 0 (the outside world) is correctly shaped.
+        assert_eq!(self.children[0].outputs, self.inputs());
+        assert_eq!(self.children[0].inputs, self.outputs());
 
         // Each child has expressed initial capabilities (their `shared_progress.internals`).
         // We introduce these into the progress tracker to determine the scope's initial
@@ -535,7 +542,7 @@ where
         self.propagate_pointstamps();  // Propagate expressed capabilities to output frontiers.
 
         // Return summaries and shared progress information.
-        (internal_summary, self.shared_progress.clone())
+        (self.get_internal_structure(), self.shared_progress.clone())
     }
 
     fn set_external_summary(&mut self) {
