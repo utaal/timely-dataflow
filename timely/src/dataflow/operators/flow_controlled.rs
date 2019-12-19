@@ -5,6 +5,7 @@ use crate::order::{PartialOrder, TotalOrder};
 use crate::progress::timestamp::Timestamp;
 use crate::dataflow::operators::generic::operator::source;
 use crate::dataflow::operators::probe::Handle;
+use crate::dataflow::operators::capability::CapabilityTrait;
 use crate::dataflow::{Stream, Scope};
 
 /// Output of the input reading function for iterator_source.
@@ -96,17 +97,17 @@ pub fn iterator_source<
                              lower_bound,
                              data,
                              target: new_target,
-                         }) = input_f(cap.time()) {
+                         }) = input_f(cap.expect_single()) {
                             target = new_target;
                             let mut has_data = false;
                             for (t, ds) in data.into_iter() {
-                                cap = if cap.time() != &t { cap.delayed(&t) } else { cap };
+                                cap = if cap.expect_single() != &t { cap.delayed(&[t]) } else { cap };
                                 let mut session = output.session(&cap);
                                 session.give_iterator(ds.into_iter());
                                 has_data = true;
                             }
 
-                            cap = if cap.time().less_than(&lower_bound) { cap.delayed(&lower_bound) } else { cap };
+                            cap = if cap.expect_single().less_than(&lower_bound) { cap.delayed(&[lower_bound]) } else { cap };
                             if !has_data {
                                 break Some(cap);
                             }

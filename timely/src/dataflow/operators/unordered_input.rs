@@ -84,7 +84,7 @@ impl<G: Scope> UnorderedInput<G> for G {
         let (output, registrar) = Tee::<G::Timestamp, D>::new();
         let internal = Rc::new(RefCell::new(ChangeBatch::new()));
         // let produced = Rc::new(RefCell::new(ChangeBatch::new()));
-        let cap = mint_capability(G::Timestamp::minimum(), internal.clone());
+        let cap = mint_capability(vec![G::Timestamp::minimum()], internal.clone());
         let counter = PushCounter::new(output);
         let produced = counter.produced().clone();
         let peers = self.peers();

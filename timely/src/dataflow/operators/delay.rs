@@ -7,6 +7,7 @@ use crate::order::{PartialOrder, TotalOrder};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::{Stream, Scope};
 use crate::dataflow::operators::generic::operator::Operator;
+use crate::dataflow::operators::capability::CapabilityTrait;
 
 /// Methods to advance the timestamps of records or batches of records.
 pub trait Delay<G: Scope, D: Data> {
@@ -102,17 +103,17 @@ impl<G: Scope, D: Data> Delay<G, D> for Stream<G, D> {
             input.for_each(|time, data| {
                 data.swap(&mut vector);
                 for datum in vector.drain(..) {
-                    let new_time = func(&datum, &time);
-                    assert!(time.time().less_equal(&new_time));
+                    let new_time = func(&datum, time.expect_single());
+                    assert!(time.expect_single().less_equal(&new_time));
                     elements.entry(new_time.clone())
-                            .or_insert_with(|| { notificator.notify_at(time.delayed(&new_time)); Vec::new() })
+                            .or_insert_with(|| { notificator.notify_at(time.delayed(&[new_time])); Vec::new() })
                             .push(datum);
                 }
             });
 
             // for each available notification, send corresponding set
             notificator.for_each(|time,_,_| {
-                if let Some(mut data) = elements.remove(&time) {
+                if let Some(mut data) = elements.remove(time.expect_single()) {
                     output.session(&time).give_iterator(data.drain(..));
                 }
             });
@@ -129,16 +130,16 @@ impl<G: Scope, D: Data> Delay<G, D> for Stream<G, D> {
         let mut elements = HashMap::new();
         self.unary_notify(Pipeline, "Delay", vec![], move |input, output, notificator| {
             input.for_each(|time, data| {
-                let new_time = func(&time);
-                assert!(time.time().less_equal(&new_time));
+                let new_time = func(time.expect_single());
+                assert!(time.expect_single().less_equal(&new_time));
                 elements.entry(new_time.clone())
-                        .or_insert_with(|| { notificator.notify_at(time.delayed(&new_time)); Vec::new() })
+                        .or_insert_with(|| { notificator.notify_at(time.delayed(&[new_time])); Vec::new() })
                         .push(data.replace(Vec::new()));
             });
 
             // for each available notification, send corresponding set
             notificator.for_each(|time,_,_| {
-                if let Some(mut datas) = elements.remove(&time) {
+                if let Some(mut datas) = elements.remove(time.expect_single()) {
                     for mut data in datas.drain(..) {
                         output.session(&time).give_vec(&mut data);
                     }

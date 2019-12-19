@@ -16,7 +16,7 @@ pub type Bundle<T, D> = crate::communication::Message<Message<T, D>>;
 #[derive(Clone, Abomonation, Serialize, Deserialize)]
 pub struct Message<T, D> {
     /// The timestamp associated with the message.
-    pub time: T,
+    pub time: Vec<T>,
     /// The data in the message.
     pub data: Vec<D>,
     /// The source worker.
@@ -32,7 +32,7 @@ impl<T, D> Message<T, D> {
     }
 
     /// Creates a new message instance from arguments.
-    pub fn new(time: T, data: Vec<D>, from: usize, seq: usize) -> Self {
+    pub fn new(time: Vec<T>, data: Vec<D>, from: usize, seq: usize) -> Self {
         Message { time, data, from, seq }
     }
 

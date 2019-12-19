@@ -145,7 +145,8 @@ impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Data> Push<Bun
         if let Some(message) = message {
             let outer_message = message.as_mut();
             let data = ::std::mem::replace(&mut outer_message.data, Vec::new());
-            let mut inner_message = Some(Bundle::from_typed(Message::new(TInner::to_inner(outer_message.time.clone()), data, 0, 0)));
+            let inner_time = outer_message.time.iter().map(|t| TInner::to_inner(t.clone())).collect::<Vec<_>>();
+            let mut inner_message = Some(Bundle::from_typed(Message::new(inner_time, data, 0, 0)));
             self.targets.push(&mut inner_message);
             if let Some(inner_message) = inner_message {
                 if let Some(inner_message) = inner_message.if_typed() {
@@ -169,7 +170,8 @@ where TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Data {
         if let Some(message) = message {
             let inner_message = message.as_mut();
             let data = ::std::mem::replace(&mut inner_message.data, Vec::new());
-            let mut outer_message = Some(Bundle::from_typed(Message::new(inner_message.time.clone().to_outer(), data, 0, 0)));
+            let outer_time = inner_message.time.iter().map(|t| t.to_outer()).collect::<Vec<_>>();
+            let mut outer_message = Some(Bundle::from_typed(Message::new(outer_time, data, 0, 0)));
             self.targets.push(&mut outer_message);
             if let Some(outer_message) = outer_message {
                 if let Some(outer_message) = outer_message.if_typed() {

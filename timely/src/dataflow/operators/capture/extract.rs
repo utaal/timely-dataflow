@@ -44,11 +44,11 @@ pub trait Extract<T: Ord, D: Ord> {
     ///
     /// assert_eq!(recv.extract()[0].1, (0..10).collect::<Vec<_>>());
     /// ```
-    fn extract(self) -> Vec<(T, Vec<D>)>;
+    fn extract(self) -> Vec<(Vec<T>, Vec<D>)>;
 }
 
 impl<T: Ord, D: Ord> Extract<T,D> for ::std::sync::mpsc::Receiver<Event<T, D>> {
-    fn extract(self) -> Vec<(T, Vec<D>)> {
+    fn extract(self) -> Vec<(Vec<T>, Vec<D>)> {
         let mut result = Vec::new();
         for event in self {
             if let Event::Messages(time, data) = event {

@@ -10,7 +10,7 @@ pub enum Event<T, D> {
     /// Progress received via `push_external_progress`.
     Progress(Vec<(T, i64)>),
     /// Messages received via the data stream.
-    Messages(T, Vec<D>),
+    Messages(Vec<T>, Vec<D>),
 }
 
 /// Iterates over contained `Event<T, D>`.

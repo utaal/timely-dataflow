@@ -35,7 +35,7 @@ pub trait Inspect<G: Scope, D: Data> {
     ///            .inspect_time(|t, x| println!("seen at: {:?}\t{:?}", t, x));
     /// });
     /// ```
-    fn inspect_time(&self, mut func: impl FnMut(&G::Timestamp, &D)+'static) -> Stream<G, D> {
+    fn inspect_time(&self, mut func: impl FnMut(&[G::Timestamp], &D)+'static) -> Stream<G, D> {
         self.inspect_batch(move |time, data| {
             for datum in data.iter() {
                 func(&time, &datum);
@@ -54,12 +54,12 @@ pub trait Inspect<G: Scope, D: Data> {
     ///            .inspect_batch(|t,xs| println!("seen at: {:?}\t{:?} records", t, xs.len()));
     /// });
     /// ```
-    fn inspect_batch(&self, func: impl FnMut(&G::Timestamp, &[D])+'static) -> Stream<G, D>;
+    fn inspect_batch(&self, func: impl FnMut(&[G::Timestamp], &[D])+'static) -> Stream<G, D>;
 }
 
 impl<G: Scope, D: Data> Inspect<G, D> for Stream<G, D> {
 
-    fn inspect_batch(&self, mut func: impl FnMut(&G::Timestamp, &[D])+'static) -> Stream<G, D> {
+    fn inspect_batch(&self, mut func: impl FnMut(&[G::Timestamp], &[D])+'static) -> Stream<G, D> {
         let mut vector = Vec::new();
         self.unary(Pipeline, "InspectBatch", move |_,_| move |input, output| {
             input.for_each(|time, data| {

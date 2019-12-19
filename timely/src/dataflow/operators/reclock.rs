@@ -69,11 +69,14 @@ impl<S: Scope, D: Data> Reclock<S, D> for Stream<S, D> {
             notificator.for_each(|cap,_,_| {
                 let mut session = output.session(&cap);
                 for &mut (ref t, ref mut data) in &mut stash {
-                    if t.less_equal(cap.time()) {
+                    // TODO check for multi-time caps
+                    if !cap.time().iter().any(|t1| t.iter().any(|t2| t1.less_than(t2))) {
                         session.give_vec(data);
                     }
                 }
-                stash.retain(|x| !x.0.less_equal(cap.time()));
+                // TODO fix the following
+                unimplemented!();
+                // stash.retain(|x| !x.0.less_equal(cap.time()));
             });
         })
     }

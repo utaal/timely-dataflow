@@ -63,7 +63,7 @@ impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> StateMachine<S, K, V> f
             H: Fn(&K)->u64+'static,                     // "hash" function for keys
         >(&self, fold: F, hash: H) -> Stream<S, R> where S::Timestamp : Hash+Eq {
 
-        let mut pending: HashMap<_, Vec<(K, V)>> = HashMap::new();   // times -> (keys -> state)
+        let mut pending: HashMap<Vec<S::Timestamp>, Vec<(K, V)>> = HashMap::new();   // times -> (keys -> state)
         let mut states = HashMap::new();    // keys -> state
 
         let mut vector = Vec::new();
@@ -91,8 +91,9 @@ impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> StateMachine<S, K, V> f
                 data.swap(&mut vector);
 
                 // stash if not time yet
-                if notificator.frontier(0).less_than(time.time()) {
-                    pending.entry(time.time().clone()).or_insert_with(Vec::new).extend(vector.drain(..));
+                // TODO double-check this is correct with multi-time caps
+                if notificator.frontier(0).strongly_dominates(time.time()) {
+                    pending.entry(Vec::from(time.time())).or_insert_with(Vec::new).extend(vector.drain(..));
                     notificator.notify_at(time.retain());
                 }
                 else {

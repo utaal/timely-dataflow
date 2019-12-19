@@ -119,8 +119,10 @@ impl<G: Scope, D: Data> ConnectLoop<G, D> for Stream<G, D> {
             let mut output = output.activate();
             input.for_each(|cap, data| {
                 data.swap(&mut vector);
-                if let Some(new_time) = summary.results_in(cap.time()) {
-                    let new_cap = cap.delayed(&new_time);
+                let advanced_times: Vec<_> = cap.time().iter().filter_map(|t| summary.results_in(t)).collect();
+                if advanced_times.len() > 0 {
+                    // TODO make it possible to directly pass a `Vec` to `delayed` ?
+                    let new_cap = cap.delayed(&advanced_times[..]);
                     output
                         .session(&new_cap)
                         .give_vec(&mut vector);

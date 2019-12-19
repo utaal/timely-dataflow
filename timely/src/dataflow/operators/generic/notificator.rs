@@ -294,7 +294,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
     /// notifications, which are only re-examine with calls to `make_available`.
     #[inline]
     pub fn notify_at_frontiered<'a>(&mut self, cap: Capability<T>, frontiers: &'a [&'a MutableAntichain<T>]) {
-        if frontiers.iter().all(|f| !f.less_equal(cap.time())) {
+        if frontiers.iter().all(|f| !f.partially_dominates(cap.time())) {
             self.available.push(OrderReversed::new(cap));
         }
         else {
@@ -321,7 +321,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
             self.pending.retain(|x| x.1 > 0);
 
             for i in 0 .. self.pending.len() {
-                if frontiers.iter().all(|f| !f.less_equal(&self.pending[i].0)) {
+                if frontiers.iter().all(|f| !f.partially_dominates(&self.pending[i].0)) {
                     // TODO : This clones a capability, whereas we could move it instead.
                     self.available.push(OrderReversed::new(self.pending[i].0.clone()));
                     self.pending[i].1 = 0;

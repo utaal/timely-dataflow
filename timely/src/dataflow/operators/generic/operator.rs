@@ -366,7 +366,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         self.unary_frontier(pact, name, move |capability, _info| {
             let mut notificator = FrontierNotificator::new();
             for time in init {
-                notificator.notify_at(capability.delayed(&time));
+                notificator.notify_at(capability.delayed(&[time]));
             }
 
             let logging = self.scope().logging();
@@ -452,7 +452,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         self.binary_frontier(other, pact1, pact2, name, |capability, _info| {
             let mut notificator = FrontierNotificator::new();
             for time in init {
-                notificator.notify_at(capability.delayed(&time));
+                notificator.notify_at(capability.delayed(&[time]));
             }
 
             let logging = self.scope().logging();

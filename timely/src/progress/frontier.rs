@@ -317,6 +317,14 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
         self.frontier().less_equal(time)
     }
 
+    /// Returns true if *any* element of `time` is greater or equal to some element of the
+    /// frontier.
+    #[inline]
+    // TODO better name
+    pub fn partially_dominates(&self, time: &[T]) -> bool {
+        self.frontier().partially_dominates(time)
+    }
+
     /// Allows a single-element push, but dirties the antichain and prevents inspection until cleaned.
     ///
     /// At the moment inspection is prevented via panic, so best be careful (this should probably be fixed).
@@ -514,6 +522,14 @@ impl<'a, T: 'a+PartialOrder> AntichainRef<'a, T> {
         self.iter().any(|x| x.less_than(time))
     }
 
+    /// Returns true if every element of `time` is greater or equal to some element of the
+    /// `AntichainRef` and there's at least one element of the `AntichainRef` that's
+    /// less_than an element of `time`.
+    #[inline]
+    pub fn strongly_dominates(&self, time: &[T]) -> bool {
+        self.dominates(time) && self.iter().any(|t1| time.iter().any(|t2| t1.less_than(t2)))
+    }
+
     /// Returns true if any item in the `AntichainRef` is less than or equal to the argument.
     #[inline]
     ///
@@ -529,6 +545,20 @@ impl<'a, T: 'a+PartialOrder> AntichainRef<'a, T> {
     ///```
     pub fn less_equal(&self, time: &T) -> bool {
         self.iter().any(|x| x.less_equal(time))
+    }
+
+    /// Returns true if every element of `time` is greater or equal to some element of the
+    /// `AntichainRef`.
+    #[inline]
+    pub fn dominates(&self, time: &[T]) -> bool {
+        time.iter().all(|t2| self.iter().any(|t1| t1.less_equal(t2)))
+    }
+
+    /// Returns true if *any* element of `time` is greater or equal to some element of the
+    /// `AntichainRef`.
+    #[inline]
+    pub fn partially_dominates(&self, time: &[T]) -> bool {
+        time.iter().any(|t2| self.iter().any(|t1| t1.less_equal(t2)))
     }
 
     /// Returns the number of elements in this `AntichainRef`.

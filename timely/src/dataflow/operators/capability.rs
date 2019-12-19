@@ -31,21 +31,70 @@ use crate::progress::Timestamp;
 use crate::progress::ChangeBatch;
 use crate::scheduling::Activations;
 
+const SMALL_VEC_INLINE_LEN: u8 = 16;
+
+// enum SmallVecStorage<T> {
+//     Inline([std::mem::MaybeUninit<T>; SMALL_VEC_INLINE_LEN as usize], u8),
+//     Heap(Vec<T>),
+// }
+// 
+// #[derive(Clone)]
+// pub struct SmallVec<T> {
+//     storage: SmallVecStorage<T>,
+// }
+// 
+// impl<T> SmallVec<T> {
+//     pub fn new() -> Self {
+//         Self {
+//             storage: SmallVecStorage::Inline([std::mem::MaybeUninit::uninit(); 16], 0),
+//         }
+//     }
+// 
+//     pub fn push(&mut self, t: T) {
+//         match &mut self.storage {
+//             &mut SmallVecStorage::Inline(ref mut elems, ref mut len) => {
+//                 if *len < SMALL_VEC_INLINE_LEN {
+//                     *elems[*len] = t;
+//                     *len += 1;
+//                 } else {
+//                     // TODO optimize?
+//                     let new_storage = SmallVecStorage::Heap(Vec::from_iter(elems[..].iter().map(|x| x.as_ref())));
+//                     new_storage.push(t);
+//                     self.storage = new_storage;
+//                 }
+//             },
+//             &mut SmallVecStorage::Heap(ref mut elems) => {
+//                 elems.push(t);
+//             },
+//         }
+//     }
+// 
+// }
+
 /// An internal trait expressing the capability to send messages with a given timestamp.
 pub trait CapabilityTrait<T: Timestamp> {
-    /// The timestamp associated with the capability.
-    fn time(&self) -> &T;
+    /// The timestamps associated with the capability.
+    fn time(&self) -> &[T];
+    /// The single timestamp associated with the capability, or None.
+    fn single(&self) -> Option<&T>;
+    /// The single timestamp associated with the capability.
+    /// Panics if there are zero or many.
+    fn expect_single(&self) -> &T {
+        self.single().expect("The capability {:?} has zero or many timestamps.")
+    }
     fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool;
 }
 
 impl<'a, T: Timestamp, C: CapabilityTrait<T>> CapabilityTrait<T> for &'a C {
-    fn time(&self) -> &T { (**self).time() }
+    fn time(&self) -> &[T] { (**self).time() }
+    fn single(&self) -> Option<&T> { (**self).single() }
     fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool {
         (**self).valid_for_output(query_buffer)
     }
 }
 impl<'a, T: Timestamp, C: CapabilityTrait<T>> CapabilityTrait<T> for &'a mut C {
-    fn time(&self) -> &T { (**self).time() }
+    fn time(&self) -> &[T] { (**self).time() }
+    fn single(&self) -> Option<&T> { (**self).single() }
     fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool {
         (**self).valid_for_output(query_buffer)
     }
@@ -58,12 +107,19 @@ impl<'a, T: Timestamp, C: CapabilityTrait<T>> CapabilityTrait<T> for &'a mut C {
 /// constructed by the system, and should eventually be dropped by the user. Failure to drop
 /// a capability (for whatever reason) will cause timely dataflow's progress tracking to stall.
 pub struct Capability<T: Timestamp> {
-    time: T,
+    time: Vec<T>,
     internal: Rc<RefCell<ChangeBatch<T>>>,
 }
 
 impl<T: Timestamp> CapabilityTrait<T> for Capability<T> {
-    fn time(&self) -> &T { &self.time }
+    fn time(&self) -> &[T] { &self.time[..] }
+    fn single(&self) -> Option<&T> {
+        if self.time.len() == 1 {
+            Some(&self.time[0])
+        } else {
+            None
+        }
+    }
     fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool {
         Rc::ptr_eq(&self.internal, query_buffer)
     }
@@ -72,17 +128,20 @@ impl<T: Timestamp> CapabilityTrait<T> for Capability<T> {
 impl<T: Timestamp> Capability<T> {
     /// The timestamp associated with this capability.
     #[inline]
-    pub fn time(&self) -> &T {
-        &self.time
+    pub fn time(&self) -> &[T] {
+        &self.time[..]
     }
 
-    /// Makes a new capability for a timestamp `new_time` greater or equal to the timestamp of
+    /// Makes a new capability for a timestamp frontier `new_time` greater or equal to the timestamp of
     /// the source capability (`self`).
     ///
-    /// This method panics if `self.time` is not less or equal to `new_time`.
+    /// This method panics if `self.time` does not dominate `new_time`.
     #[inline]
-    pub fn delayed(&self, new_time: &T) -> Capability<T> {
-        if !self.time.less_equal(new_time) {
+    // TODO new_time: &[T] should maybe be &[&[T]]
+    pub fn delayed(&self, new_time: &[T]) -> Capability<T> {
+        let new_time: Vec<T> = Vec::from(new_time);
+        if !new_time.iter().all(|nt| self.time.iter().any(|ot| ot.less_equal(nt))) {
+            // TODO update message
             panic!("Attempted to delay {:?} to {:?}, which is not `less_equal` the capability's time.", self, new_time);
         }
         mint(new_time.clone(), self.internal.clone())
@@ -92,7 +151,7 @@ impl<T: Timestamp> Capability<T> {
     ///
     /// This method panics if `self.time` is not less or equal to `new_time`.
     #[inline]
-    pub fn downgrade(&mut self, new_time: &T) {
+    pub fn downgrade(&mut self, new_time: &[T]) {
         let new_cap = self.delayed(new_time);
         *self = new_cap;
     }
@@ -102,8 +161,8 @@ impl<T: Timestamp> Capability<T> {
 /// `ChangeBatch`.
 /// Declared separately so that it can be kept private when `Capability` is re-exported.
 #[inline]
-pub fn mint<T: Timestamp>(time: T, internal: Rc<RefCell<ChangeBatch<T>>>) -> Capability<T> {
-    internal.borrow_mut().update(time.clone(), 1);
+pub fn mint<T: Timestamp>(time: Vec<T>, internal: Rc<RefCell<ChangeBatch<T>>>) -> Capability<T> {
+    internal.borrow_mut().extend(time.iter().map(|t| (t.clone(), 1)));
     Capability {
         time,
         internal,
@@ -116,7 +175,9 @@ pub fn mint<T: Timestamp>(time: T, internal: Rc<RefCell<ChangeBatch<T>>>) -> Cap
 impl<T: Timestamp> Drop for Capability<T> {
     #[inline]
     fn drop(&mut self) {
-        self.internal.borrow_mut().update(self.time.clone(), -1);
+        for t in self.time.iter() {
+            self.internal.borrow_mut().extend(self.time.iter().map(|t| (t.clone(), -1)));
+        }
     }
 }
 
@@ -128,9 +189,9 @@ impl<T: Timestamp> Clone for Capability<T> {
 }
 
 impl<T: Timestamp> Deref for Capability<T> {
-    type Target = T;
+    type Target = [T];
     #[inline]
-    fn deref(&self) -> &T {
+    fn deref(&self) -> &[T] {
         &self.time
     }
 }
@@ -152,7 +213,7 @@ impl<T: Timestamp> Eq for Capability<T> { }
 impl<T: Timestamp> PartialOrder for Capability<T> {
     #[inline]
     fn less_equal(&self, other: &Self) -> bool {
-        self.time().less_equal(other.time()) && Rc::ptr_eq(&self.internal, &other.internal)
+        self.time().iter().all(|t| other.time().iter().any(|o| t.less_equal(o))) && Rc::ptr_eq(&self.internal, &other.internal)
     }
 }
 
@@ -168,12 +229,19 @@ impl<T: Timestamp> ::std::hash::Hash for Capability<T> {
 /// The capability reference supplies a `retain(self)` method which consumes the reference
 /// and turns it into an owned capability
 pub struct CapabilityRef<'cap, T: Timestamp+'cap> {
-    time: &'cap T,
+    time: &'cap [T],
     internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>,
 }
 
 impl<'cap, T: Timestamp+'cap> CapabilityTrait<T> for CapabilityRef<'cap, T> {
-    fn time(&self) -> &T { self.time }
+    fn time(&self) -> &[T] { self.time }
+    fn single(&self) -> Option<&T> {
+        if self.time.len() == 1 {
+            Some(&self.time[0])
+        } else {
+            None
+        }
+    }
     fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool {
         // let borrow = ;
         self.internal.borrow().iter().any(|rc| Rc::ptr_eq(rc, query_buffer))
@@ -183,7 +251,7 @@ impl<'cap, T: Timestamp+'cap> CapabilityTrait<T> for CapabilityRef<'cap, T> {
 impl<'cap, T: Timestamp+'cap> CapabilityRef<'cap, T> {
     /// The timestamp associated with this capability.
     #[inline]
-    pub fn time(&self) -> &T {
+    pub fn time(&self) -> &[T] {
         self.time
     }
 
@@ -192,18 +260,20 @@ impl<'cap, T: Timestamp+'cap> CapabilityRef<'cap, T> {
     ///
     /// This method panics if `self.time` is not less or equal to `new_time`.
     #[inline]
-    pub fn delayed(&self, new_time: &T) -> Capability<T> {
+    pub fn delayed(&self, new_time: &[T]) -> Capability<T> {
         self.delayed_for_output(new_time, 0)
     }
 
     /// Delays capability for a specific output port.
-    pub fn delayed_for_output(&self, new_time: &T, output_port: usize) -> Capability<T> {
+    pub fn delayed_for_output(&self, new_time: &[T], output_port: usize) -> Capability<T> {
+        let new_time: Vec<T> = Vec::from(new_time);
         // TODO : Test operator summary?
-        if !self.time.less_equal(new_time) {
+        if !self.time.iter().all(|t| new_time.iter().any(|o| t.less_equal(o))) {
+            // TODO update error message
             panic!("Attempted to delay {:?} to {:?}, which is not `less_equal` the capability's time.", self, new_time);
         }
         if output_port < self.internal.borrow().len() {
-            mint(new_time.clone(), self.internal.borrow()[output_port].clone())
+            mint(new_time, self.internal.borrow()[output_port].clone())
         }
         else {
             panic!("Attempted to acquire a capability for a non-existent output port.");
@@ -224,7 +294,7 @@ impl<'cap, T: Timestamp+'cap> CapabilityRef<'cap, T> {
     /// Transforms to an owned capability for a specific output port.
     pub fn retain_for_output(self, output_port: usize) -> Capability<T> {
         if output_port < self.internal.borrow().len() {
-            mint(self.time.clone(), self.internal.borrow()[output_port].clone())
+            mint(Vec::from(self.time), self.internal.borrow()[output_port].clone())
         }
         else {
             panic!("Attempted to acquire a capability for a non-existent output port.");
@@ -233,9 +303,9 @@ impl<'cap, T: Timestamp+'cap> CapabilityRef<'cap, T> {
 }
 
 impl<'cap, T: Timestamp> Deref for CapabilityRef<'cap, T> {
-    type Target = T;
+    type Target = [T];
     #[inline]
-    fn deref(&self) -> &T {
+    fn deref(&self) -> &[T] {
         self.time
     }
 }
@@ -251,7 +321,7 @@ impl<'cap, T: Timestamp> Debug for CapabilityRef<'cap, T> {
 /// `ChangeBatch`.
 /// Declared separately so that it can be kept private when `Capability` is re-exported.
 #[inline]
-pub fn mint_ref<'cap, T: Timestamp>(time: &'cap T, internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>) -> CapabilityRef<'cap, T> {
+pub fn mint_ref<'cap, T: Timestamp>(time: &'cap [T], internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>) -> CapabilityRef<'cap, T> {
     CapabilityRef {
         time,
         internal,
@@ -267,7 +337,8 @@ pub struct ActivateCapability<T: Timestamp> {
 }
 
 impl<T: Timestamp> CapabilityTrait<T> for ActivateCapability<T> {
-    fn time(&self) -> &T { self.capability.time() }
+    fn time(&self) -> &[T] { self.capability.time() }
+    fn single(&self) -> Option<&T> { self.capability.single() }
     fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool {
         self.capability.valid_for_output(query_buffer)
     }
@@ -283,11 +354,11 @@ impl<T: Timestamp> ActivateCapability<T> {
         }
     }
     /// The timestamp associated with this capability.
-    pub fn time(&self) -> &T {
+    pub fn time(&self) -> &[T] {
         self.capability.time()
     }
     /// Creates a new delayed capability.
-    pub fn delayed(&self, time: &T) -> Self {
+    pub fn delayed(&self, time: &[T]) -> Self {
         ActivateCapability {
             capability: self.capability.delayed(time),
             address: self.address.clone(),
@@ -295,7 +366,7 @@ impl<T: Timestamp> ActivateCapability<T> {
         }
     }
     /// Downgrades this capability.
-    pub fn downgrade(&mut self, time: &T) {
+    pub fn downgrade(&mut self, time: &[T]) {
         self.capability.downgrade(time);
         self.activations.borrow_mut().activate(&self.address[..]);
     }
@@ -312,37 +383,37 @@ pub struct CapabilitySet<T: Timestamp> {
     elements: Vec<Capability<T>>,
 }
 
-impl<T: Timestamp> CapabilitySet<T> {
-
-    /// Allocates an empty capability set.
-    pub fn new() -> Self {
-        CapabilitySet { elements: Vec::new() }
-    }
-
-    /// Inserts `capability` into the set, discarding redundant capabilities.
-    pub fn insert(&mut self, capability: Capability<T>) {
-        if !self.elements.iter().any(|c| c.less_equal(&capability)) {
-            self.elements.retain(|c| !capability.less_equal(c));
-            self.elements.push(capability);
-        }
-    }
-
-    /// Creates a new capability to send data at `time`.
-    ///
-    /// This method panics if there does not exist a capability in `self.elements` less or equal to `time`.
-    pub fn delayed(&self, time: &T) -> Capability<T> {
-        self.elements.iter().find(|c| c.time().less_equal(time)).unwrap().delayed(time)
-    }
-
-    /// Downgrades the set of capabilities to correspond with the times in `frontier`.
-    ///
-    /// This method panics if any element of `frontier` is not greater or equal to some element of `self.elements`.
-    pub fn downgrade(&mut self, frontier: &[T]) {
-        let count = self.elements.len();
-        for time in frontier.iter() {
-            let capability = self.delayed(time);
-            self.elements.push(capability);
-        }
-        self.elements.drain(..count);
-    }
-}
+// impl<T: Timestamp> CapabilitySet<T> {
+// 
+//     /// Allocates an empty capability set.
+//     pub fn new() -> Self {
+//         CapabilitySet { elements: Vec::new() }
+//     }
+// 
+//     /// Inserts `capability` into the set, discarding redundant capabilities.
+//     pub fn insert(&mut self, capability: Capability<T>) {
+//         if !self.elements.iter().any(|c| c.less_equal(&capability)) {
+//             self.elements.retain(|c| !capability.less_equal(c));
+//             self.elements.push(capability);
+//         }
+//     }
+// 
+//     /// Creates a new capability to send data at `time`.
+//     ///
+//     /// This method panics if there does not exist a capability in `self.elements` less or equal to `time`.
+//     pub fn delayed(&self, time: &T) -> Capability<T> {
+//         self.elements.iter().find(|c| c.time().less_equal(time)).unwrap().delayed(time)
+//     }
+// 
+//     /// Downgrades the set of capabilities to correspond with the times in `frontier`.
+//     ///
+//     /// This method panics if any element of `frontier` is not greater or equal to some element of `self.elements`.
+//     pub fn downgrade(&mut self, frontier: &[T]) {
+//         let count = self.elements.len();
+//         for time in frontier.iter() {
+//             let capability = self.delayed(time);
+//             self.elements.push(capability);
+//         }
+//         self.elements.drain(..count);
+//     }
+// }

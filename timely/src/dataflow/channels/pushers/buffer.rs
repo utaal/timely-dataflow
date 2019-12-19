@@ -11,7 +11,7 @@ use crate::communication::Push;
 /// The `Buffer` type should be used by calling `session` with a time, which checks whether
 /// data must be flushed and creates a `Session` object which allows sending at the given time.
 pub struct Buffer<T, D, P: Push<Bundle<T, D>>> {
-    time: Option<T>,  // the currently open time, if it is open
+    time: Option<Vec<T>>,  // the currently open time, if it is open
     buffer: Vec<D>,   // a buffer for records, to send at self.time
     pusher: P,
 }
@@ -28,9 +28,9 @@ impl<T, D, P: Push<Bundle<T, D>>> Buffer<T, D, P> where T: Eq+Clone {
     }
 
     /// Returns a `Session`, which accepts data to send at the associated time
-    pub fn session(&mut self, time: &T) -> Session<T, D, P> {
+    pub fn session(&mut self, time: &[T]) -> Session<T, D, P> {
         if let Some(true) = self.time.as_ref().map(|x| x != time) { self.flush(); }
-        self.time = Some(time.clone());
+        self.time = Some(Vec::from(time));
         Session { buffer: self }
     }
     /// Allocates a new `AutoflushSession` which flushes itself on drop.

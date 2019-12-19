@@ -2,6 +2,7 @@
 
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
+use crate::dataflow::operators::capability::CapabilityTrait;
 use crate::dataflow::{Scope, Stream};
 use crate::Data;
 
@@ -56,7 +57,7 @@ impl<S: Scope, D: Data> Branch<S, D> for Stream<S, D> {
                     let mut out1 = output1_handle.session(&time);
                     let mut out2 = output2_handle.session(&time);
                     for datum in vector.drain(..) {
-                        if condition(&time.time(), &datum) {
+                        if condition(time.expect_single(), &datum) {
                             out2.give(datum);
                         } else {
                             out1.give(datum);
@@ -117,7 +118,7 @@ impl<S: Scope, D: Data> BranchWhen<S, D> for Stream<S, D> {
 
                 input.for_each(|time, data| {
                     data.swap(&mut vector);
-                    let mut out = if condition(&time.time()) {
+                    let mut out = if condition(time.expect_single()) {
                         output2_handle.session(&time)
                     } else {
                         output1_handle.session(&time)
