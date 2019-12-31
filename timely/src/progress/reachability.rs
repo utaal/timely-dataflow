@@ -127,6 +127,8 @@ use crate::progress::timestamp::PathSummary;
 /// ```
 #[derive(Clone, Debug)]
 pub struct Builder<T: Timestamp> {
+    /// Path of identifiers from the root.
+    path: Vec<usize>,
     /// Internal connections within hosted operators.
     ///
     /// Indexed by operator index, then input port, then output port. This is the
@@ -145,8 +147,9 @@ pub struct Builder<T: Timestamp> {
 impl<T: Timestamp> Builder<T> {
 
     /// Create a new empty topology builder.
-    pub fn new() -> Self {
+    pub fn new(path: Vec<usize>) -> Self {
         Builder {
+            path: path,
             nodes: Vec::new(),
             edges: Vec::new(),
             shape: Vec::new(),
@@ -200,7 +203,7 @@ impl<T: Timestamp> Builder<T> {
             println!("{:?}", self);
         }
 
-        Tracker::allocate_from(self)
+        Tracker::allocate_from(self, self.path.clone())
     }
 
     /// Tests whether the graph a cycle of default path summaries.
@@ -347,6 +350,8 @@ impl<T: Timestamp> Builder<T> {
 /// pointstamp changes at various node input and output ports. These changes may
 /// alter the potential pointstamps that could arrive at downstream input ports.
 pub struct Tracker<T:Timestamp> {
+    /// Path of identifiers from the root.
+    pub path: Vec<usize>,
 
     /// Internal connections within hosted operators.
     ///
@@ -469,6 +474,7 @@ impl<T:Timestamp> Tracker<T> {
     pub fn update_target(&mut self, target: Target, time: T, value: i64) {
         if let Some(logger) = self.tracker_logger.as_ref() {
             logger.log(UpdateTargetEvent {
+                scope_addr: self.path.clone(),
                 operator: target.node,
                 port: target.port,
                 timestamp: format!("{:?}", time.clone()),
@@ -483,6 +489,7 @@ impl<T:Timestamp> Tracker<T> {
     pub fn update_source(&mut self, source: Source, time: T, value: i64) {
         if let Some(logger) = self.tracker_logger.as_ref() {
             logger.log(UpdateSourceEvent {
+                scope_addr: self.path.clone(),
                 operator: source.node,
                 port: source.port,
                 timestamp: format!("{:?}", time.clone()),
@@ -504,7 +511,7 @@ impl<T:Timestamp> Tracker<T> {
     ///
     /// The result is a pair of tracker, and the summaries from each input port to each
     /// output port.
-    pub fn allocate_from(builder: &Builder<T>) -> (Self, Vec<Vec<Antichain<T::Summary>>>) {
+    pub fn allocate_from(builder: &Builder<T>, path: Vec<usize>) -> (Self, Vec<Vec<Antichain<T::Summary>>>) {
 
         // Allocate buffer space for each input and input port.
         let mut per_operator =
@@ -547,6 +554,7 @@ impl<T:Timestamp> Tracker<T> {
 
         let tracker =
         Tracker {
+            path: path.clone(),
             nodes: builder.nodes.clone(),
             edges: builder.edges.clone(),
             per_operator,
@@ -594,6 +602,7 @@ impl<T:Timestamp> Tracker<T> {
             ports.into_iter()
         }).collect::<Vec<_>>();
         logger.log(DebugEvent {
+            scope_addr: self.path.clone(),
             ports,
         });
     }
@@ -602,6 +611,7 @@ impl<T:Timestamp> Tracker<T> {
     fn log_propagate_target(&self, op: usize, port: usize, time: T) {
         if let Some(logger) = self.tracker_logger.as_ref() {
             logger.log(PropagateInternalEvent {
+                scope_addr: self.path.clone(),
                 operator: op,
                 port: port,
                 timestamp: format!("{:?}", time),
@@ -614,6 +624,7 @@ impl<T:Timestamp> Tracker<T> {
     fn log_propagate_source(&self, op: usize, port: usize, time: T) {
         if let Some(logger) = self.tracker_logger.as_ref() {
             logger.log(PropagateEdgeEvent {
+                scope_addr: self.path.clone(),
                 operator: op,
                 port: port,
                 timestamp: format!("{:?}", time),
@@ -873,12 +884,14 @@ pub struct DebugEventPort {
 #[derive(Abomonation, Debug, Clone)]
 /// Log event
 pub struct DebugEvent {
+    scope_addr: Vec<usize>,
     ports: Vec<DebugEventPort>,
 }
 
 #[derive(Abomonation, Debug, Clone)]
 /// Log event
 pub struct UpdateSourceEvent {
+    scope_addr: Vec<usize>,
     operator: usize,
     port: usize,
     timestamp: String,
@@ -888,6 +901,7 @@ pub struct UpdateSourceEvent {
 #[derive(Abomonation, Debug, Clone)]
 /// Log event
 pub struct UpdateTargetEvent {
+    scope_addr: Vec<usize>,
     operator: usize,
     port: usize,
     timestamp: String,
@@ -897,6 +911,7 @@ pub struct UpdateTargetEvent {
 /// Log event
 #[derive(Abomonation, Debug, Clone)]
 pub struct PropagateEdgeEvent {
+    scope_addr: Vec<usize>,
     operator: usize,
     port: usize,
     timestamp: String,
@@ -905,6 +920,7 @@ pub struct PropagateEdgeEvent {
 /// Log event
 #[derive(Abomonation, Debug, Clone)]
 pub struct PropagateInternalEvent {
+    scope_addr: Vec<usize>,
     operator: usize,
     port: usize,
     timestamp: String

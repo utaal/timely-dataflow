@@ -154,7 +154,7 @@ where
         // Create empty child zero represenative.
         self.children[0] = PerOperatorState::empty(outputs, inputs);
 
-        let mut builder = reachability::Builder::new();
+        let mut builder = reachability::Builder::new(self.path.clone());
 
         // Child 0 has `inputs` outputs and `outputs` inputs, not yet connected.
         builder.add_node(0, outputs, inputs, vec![vec![Antichain::new(); inputs]; outputs]);
