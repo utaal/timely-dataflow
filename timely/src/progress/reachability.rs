@@ -872,7 +872,7 @@ fn summarize_outputs<T: Timestamp>(
     results
 }
 
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Serialize, Deserialize, Abomonation, Debug, Clone)]
 /// Port information in a tracker log event
 pub struct DebugEventPort {
     location: Location,
@@ -881,14 +881,14 @@ pub struct DebugEventPort {
     worklist: Vec<String>,
 }
 
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Serialize, Deserialize, Abomonation, Debug, Clone)]
 /// Log event
 pub struct DebugEvent {
     scope_addr: Vec<usize>,
     ports: Vec<DebugEventPort>,
 }
 
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Serialize, Deserialize, Abomonation, Debug, Clone)]
 /// Log event
 pub struct UpdateSourceEvent {
     scope_addr: Vec<usize>,
@@ -898,7 +898,7 @@ pub struct UpdateSourceEvent {
     delta: i64,
 }
 
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Serialize, Deserialize, Abomonation, Debug, Clone)]
 /// Log event
 pub struct UpdateTargetEvent {
     scope_addr: Vec<usize>,
@@ -909,7 +909,7 @@ pub struct UpdateTargetEvent {
 }
 
 /// Log event
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Serialize, Deserialize, Abomonation, Debug, Clone)]
 pub struct PropagateEdgeEvent {
     scope_addr: Vec<usize>,
     operator: usize,
@@ -918,7 +918,7 @@ pub struct PropagateEdgeEvent {
 }
 
 /// Log event
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Serialize, Deserialize, Abomonation, Debug, Clone)]
 pub struct PropagateInternalEvent {
     scope_addr: Vec<usize>,
     operator: usize,
@@ -926,7 +926,7 @@ pub struct PropagateInternalEvent {
     timestamp: String
 }
 
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Serialize, Deserialize, Abomonation, Debug, Clone)]
 /// An event to track progress propagation in timely.Antichain
 pub enum TrackerEvent {
     /// Generic print of the entire state.
