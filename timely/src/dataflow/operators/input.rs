@@ -158,10 +158,6 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
     fn inputs(&self) -> usize { 0 }
     fn outputs(&self) -> usize { 1 }
 
-    fn get_internal_structure(&self) -> Vec<Vec<Antichain<<T as Timestamp>::Summary>>> {
-        Vec::new()
-    }
-
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<<T as Timestamp>::Summary>>>, Rc<RefCell<SharedProgress<T>>>) {
         self.shared_progress.borrow_mut().internals[0].update(T::minimum(), self.copies as i64);
         (Vec::new(), self.shared_progress.clone())

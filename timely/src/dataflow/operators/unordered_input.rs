@@ -134,10 +134,6 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
     fn inputs(&self) -> usize { 0 }
     fn outputs(&self) -> usize { 1 }
 
-    fn get_internal_structure(&self) -> Vec<Vec<Antichain<<T as Timestamp>::Summary>>> {
-        Vec::new()
-    }
-
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<<T as Timestamp>::Summary>>>, Rc<RefCell<SharedProgress<T>>>) {
         let mut borrow = self.internal.borrow_mut();
         for (time, count) in borrow.drain() {

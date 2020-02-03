@@ -212,10 +212,6 @@ where
     fn inputs(&self) -> usize { self.shape.inputs }
     fn outputs(&self) -> usize { self.shape.outputs }
 
-    fn get_internal_structure(&self) -> Vec<Vec<Antichain<T::Summary>>> {
-        self.summary.clone()
-    }
-
     // announce internal topology as fully connected, and hold all default capabilities.
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Rc<RefCell<SharedProgress<T>>>) {
 

@@ -33,13 +33,6 @@ pub trait Operate<T: Timestamp> : Schedule {
     /// The number of outputs.
     fn outputs(&self) -> usize;
 
-    /// Fetches summary information about internal strucutre of the operator.
-    ///
-    /// Each operator must summarize its internal structure by a map from pairs `(input, output)`
-    /// to an antichain of timestamp summaries, indicating how a timestamp on any of its inputs may
-    /// be transformed to timestamps on any of its outputs.
-    fn get_internal_structure(&self) -> Vec<Vec<Antichain<T::Summary>>>;
-
     /// Fetches summary information about internal structure of the operator.
     ///
     /// Each operator must summarize its internal structure by a map from pairs `(input, output)`
