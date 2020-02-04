@@ -21,7 +21,6 @@ bincode= ["timely_communication/bincode"]
 [dependencies]
 serde = "1.0"
 serde_derive = "1.0"
-serde_json = { version = "1.0.41", default-features = false }
 abomonation = "0.7.3"
 abomonation_derive = "0.5"
 timely_bytes = { path = "../bytes", version = "0.11" }

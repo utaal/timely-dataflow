@@ -579,11 +579,11 @@ impl<T:Timestamp> Tracker<T> {
                         node: op_n,
                         port: Port::Target(tg_n),
                     },
-                    pointstamps: target.pointstamps.updates().iter().map(|x| format!("{:?}", x)).collect(),
-                    implications: target.implications.updates().iter().map(|x| format!("{:?}", x)).collect(),
+                    pointstamps: target.pointstamps.updates().iter().map(|(t, d)| (format!("{:?}", t), *d)).collect(),
+                    implications: target.implications.updates().iter().map(|(t, d)| (format!("{:?}", t), *d)).collect(),
                     worklist: self.worklist.iter()
                         .filter(|Reverse((_,loc,_))| loc.node == op_n && loc.port == Port::Target(tg_n))
-                        .map(|Reverse((t,_,d))| format!("({:?}, {})", t, d)).collect()
+                        .map(|Reverse((t,_,d))| (format!("{:?}", t), *d)).collect()
                 }
             }).collect::<Vec<_>>();
             ports.extend(per_op.sources.iter().enumerate().map(|(sc_n, source)| {
@@ -592,11 +592,11 @@ impl<T:Timestamp> Tracker<T> {
                         node: op_n,
                         port: Port::Source(sc_n),
                     },
-                    pointstamps: source.pointstamps.updates().iter().map(|x| format!("{:?}", x)).collect(),
-                    implications: source.implications.updates().iter().map(|x| format!("{:?}", x)).collect(),
+                    pointstamps: source.pointstamps.updates().iter().map(|(t, d)| (format!("{:?}", t), *d)).collect(),
+                    implications: source.implications.updates().iter().map(|(t, d)| (format!("{:?}", t), *d)).collect(),
                     worklist: self.worklist.iter()
                         .filter(|Reverse((_,loc,_))| loc.node == op_n && loc.port == Port::Source(sc_n))
-                        .map(|Reverse((t,_,d))| format!("({:?}, {})", t, d)).collect()
+                        .map(|Reverse((t,_,d))| (format!("{:?}", t), *d)).collect()
                 }
             }));
             ports.into_iter()
@@ -876,9 +876,9 @@ fn summarize_outputs<T: Timestamp>(
 /// Port information in a tracker log event
 pub struct DebugEventPort {
     location: Location,
-    pointstamps: Vec<String>,
-    implications: Vec<String>,
-    worklist: Vec<String>,
+    pointstamps: Vec<(String, i64)>,
+    implications: Vec<(String, i64)>,
+    worklist: Vec<(String, i64)>,
 }
 
 #[derive(Serialize, Deserialize, Abomonation, Debug, Clone)]
