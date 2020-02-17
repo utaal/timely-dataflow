@@ -474,6 +474,7 @@ impl<T:Timestamp> Tracker<T> {
     pub fn update_target(&mut self, target: Target, time: T, value: i64) {
         if let Some(logger) = self.tracker_logger.as_ref() {
             logger.log(UpdateTargetEvent {
+                worker_id: logger.id(),
                 scope_addr: self.path.clone(),
                 operator: target.node,
                 port: target.port,
@@ -489,6 +490,7 @@ impl<T:Timestamp> Tracker<T> {
     pub fn update_source(&mut self, source: Source, time: T, value: i64) {
         if let Some(logger) = self.tracker_logger.as_ref() {
             logger.log(UpdateSourceEvent {
+                worker_id: logger.id(),
                 scope_addr: self.path.clone(),
                 operator: source.node,
                 port: source.port,
@@ -602,6 +604,7 @@ impl<T:Timestamp> Tracker<T> {
             ports.into_iter()
         }).collect::<Vec<_>>();
         logger.log(DebugEvent {
+            worker_id: logger.id(),
             scope_addr: self.path.clone(),
             ports,
         });
@@ -611,6 +614,7 @@ impl<T:Timestamp> Tracker<T> {
     fn log_propagate_target(&self, op: usize, port: usize, time: T) {
         if let Some(logger) = self.tracker_logger.as_ref() {
             logger.log(PropagateInternalEvent {
+                worker_id: logger.id(),
                 scope_addr: self.path.clone(),
                 operator: op,
                 port: port,
@@ -624,6 +628,7 @@ impl<T:Timestamp> Tracker<T> {
     fn log_propagate_source(&self, op: usize, port: usize, time: T) {
         if let Some(logger) = self.tracker_logger.as_ref() {
             logger.log(PropagateEdgeEvent {
+                worker_id: logger.id(),
                 scope_addr: self.path.clone(),
                 operator: op,
                 port: port,
@@ -884,6 +889,7 @@ pub struct DebugEventPort {
 #[derive(Serialize, Deserialize, Abomonation, Debug, Clone)]
 /// Log event
 pub struct DebugEvent {
+    worker_id: usize,
     scope_addr: Vec<usize>,
     ports: Vec<DebugEventPort>,
 }
@@ -891,6 +897,7 @@ pub struct DebugEvent {
 #[derive(Serialize, Deserialize, Abomonation, Debug, Clone)]
 /// Log event
 pub struct UpdateSourceEvent {
+    worker_id: usize,
     scope_addr: Vec<usize>,
     operator: usize,
     port: usize,
@@ -901,6 +908,7 @@ pub struct UpdateSourceEvent {
 #[derive(Serialize, Deserialize, Abomonation, Debug, Clone)]
 /// Log event
 pub struct UpdateTargetEvent {
+    worker_id: usize,
     scope_addr: Vec<usize>,
     operator: usize,
     port: usize,
@@ -911,6 +919,7 @@ pub struct UpdateTargetEvent {
 /// Log event
 #[derive(Serialize, Deserialize, Abomonation, Debug, Clone)]
 pub struct PropagateEdgeEvent {
+    worker_id: usize,
     scope_addr: Vec<usize>,
     operator: usize,
     port: usize,
@@ -920,6 +929,7 @@ pub struct PropagateEdgeEvent {
 /// Log event
 #[derive(Serialize, Deserialize, Abomonation, Debug, Clone)]
 pub struct PropagateInternalEvent {
+    worker_id: usize,
     scope_addr: Vec<usize>,
     operator: usize,
     port: usize,
