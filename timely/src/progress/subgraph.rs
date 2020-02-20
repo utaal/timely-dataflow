@@ -171,6 +171,7 @@ where
 
         let (mut tracker, scope_summary) = builder.build();
         tracker.tracker_logger = worker.log_register().get("timely/tracker");
+        tracker.debug_logger = worker.log_register().get("timely/debug");
 
         let progcaster = Progcaster::new(worker, &self.path, self.logging.clone());
 

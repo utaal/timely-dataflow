@@ -400,8 +400,16 @@ pub struct Tracker<T:Timestamp> {
     /// of the target and source `pointstamps` member.
     total_counts: i64,
 
-    /// A timely logging handle for reachability computation
+    /// A timely logging handle for progress tracking events such as updating source and
+    /// target capabilities and propagation of implication frontiers between sources and targets.
     pub tracker_logger: Option<crate::logging::Logger<TrackerEvent>>,
+
+    /// A timely logging handle for the state of progress tracking computation.
+    ///
+    /// Debug events include pointstamps and implications at every location and
+    /// self.worklist. If tracker_logger is enabled, there is exactly one TrackerEvent
+    /// for every DebugEvent.
+    pub debug_logger: Option<crate::logging::Logger<DebugEvent>>,
 }
 
 /// Target and source information for each operator.
@@ -481,6 +489,8 @@ impl<T:Timestamp> Tracker<T> {
                 timestamp: format!("{:?}", time.clone()),
                 delta: value,
             });
+        }
+        if let Some(logger) = self.debug_logger.as_ref() {
             self.print_trace(logger);
         }
         self.target_changes.update((target, time), value);
@@ -497,6 +507,8 @@ impl<T:Timestamp> Tracker<T> {
                 timestamp: format!("{:?}", time.clone()),
                 delta: value,
             });
+        }
+        if let Some(logger) = self.debug_logger.as_ref() {
             self.print_trace(logger);
         }
         self.source_changes.update((source, time), value);
@@ -567,13 +579,14 @@ impl<T:Timestamp> Tracker<T> {
             output_changes,
             total_counts: 0,
             tracker_logger: None,
+            debug_logger: None,
         };
 
         (tracker, builder_summary)
     }
 
     #[inline(always)]
-    fn print_trace(&self, logger: &crate::logging::Logger<TrackerEvent>) {
+    fn print_trace(&self, logger: &crate::logging::Logger<DebugEvent>) {
         let ports = self.per_operator.iter().enumerate().flat_map(|(op_n, per_op)| {
             let mut ports = per_op.targets.iter().enumerate().map(|(tg_n, target)| {
                 DebugEventPort {
@@ -620,6 +633,8 @@ impl<T:Timestamp> Tracker<T> {
                 port: port,
                 timestamp: format!("{:?}", time),
             });
+        }
+        if let Some(logger) = self.debug_logger.as_ref() {
             self.print_trace(logger);
         }
     }
@@ -634,6 +649,8 @@ impl<T:Timestamp> Tracker<T> {
                 port: port,
                 timestamp: format!("{:?}", time),
             });
+        }
+        if let Some(logger) = self.debug_logger.as_ref() {
             self.print_trace(logger);
         }
     }
@@ -916,8 +933,8 @@ pub struct UpdateTargetEvent {
     delta: i64,
 }
 
-/// Log event
 #[derive(Serialize, Deserialize, Abomonation, Debug, Clone)]
+/// Log event
 pub struct PropagateEdgeEvent {
     worker_id: usize,
     scope_addr: Vec<usize>,
@@ -926,8 +943,8 @@ pub struct PropagateEdgeEvent {
     timestamp: String,
 }
 
-/// Log event
 #[derive(Serialize, Deserialize, Abomonation, Debug, Clone)]
+/// Log event
 pub struct PropagateInternalEvent {
     worker_id: usize,
     scope_addr: Vec<usize>,
@@ -939,8 +956,6 @@ pub struct PropagateInternalEvent {
 #[derive(Serialize, Deserialize, Abomonation, Debug, Clone)]
 /// An event to track progress propagation in timely.Antichain
 pub enum TrackerEvent {
-    /// Generic print of the entire state.
-    Debug(DebugEvent),
     /// Change pointstamp multiplicity at source.
     UpdateSource(UpdateSourceEvent),
     /// Change pointstamp multiplicity at target.
@@ -949,10 +964,6 @@ pub enum TrackerEvent {
     PropagateEdge(PropagateEdgeEvent),
     /// Propagation of implications inside an oeprator, from taregt to connected sources.
     PropagateInternal(PropagateInternalEvent),
-}
-
-impl From<DebugEvent> for TrackerEvent {
-    fn from(v: DebugEvent) -> TrackerEvent { TrackerEvent::Debug(v) }
 }
 
 impl From<UpdateSourceEvent> for TrackerEvent {
