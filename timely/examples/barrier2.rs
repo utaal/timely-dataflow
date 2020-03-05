@@ -24,11 +24,11 @@ fn main() {
         let serialize: bool = matches.opt_present("s");
         macro_rules! worker_closure { () => (move |worker| {
             worker.log_register().insert::<TimelyEvent,_>("timely", |_, data|
-                data.iter().for_each(|x| println!("{}", serde_json::to_string(&x.2).unwrap()))
+                data.iter().for_each(|x| eprintln!("{}", serde_json::to_string(&x.2).unwrap()))
             );
 
             worker.log_register().insert::<TrackerEvent,_>("timely/tracker", |_, data|
-                data.iter().for_each(|x| println!("{}", serde_json::to_string(&x.2).unwrap()))
+                data.iter().for_each(|x| eprintln!("{}", serde_json::to_string(&x.2).unwrap()))
             );
 
             let index = worker.index();
@@ -52,10 +52,10 @@ fn main() {
                                 notificator.notify_at(cap.delayed(&time));
                             } else {
                                 if index == 0 {
-                                    println!("-------------\nSummary:\n{}", hist.summary_string());
-                                    println!("-------------\nCDF:");
-                                    for entry in hist.ccdf_upper_bound() {
-                                        println!("{:?}", entry);
+                                    // println!("-------------\nSummary:\n{}", hist.summary_string());
+                                    // println!("-------------\nCDF:");
+                                    for (p, v) in hist.ccdf_upper_bound() {
+                                        println!("{}, {}", p, v);
                                     }
                                 }
                             }
