@@ -65,11 +65,11 @@ impl<T:Timestamp+Send> Progcaster<T> {
                 seq_no: self.counter,
                 addr: self.addr.clone(),
                 // TODO: fill with additional data
-                messages: Vec::new(),
-                internal: Vec::new(),
+                changes: changes.iter().map(
+                    |((loc, time), delta)| ((*loc, format!("{:?}", time)), *delta)).collect(),
             }));
 
-            for pusher in self.pushers.iter_mut() {
+            for (pusher_index, pusher) in self.pushers.iter_mut().enumerate() {
 
                 // Attempt to re-use allocations, if possible.
                 if let Some(tuple) = &mut self.to_push {
@@ -114,9 +114,8 @@ impl<T:Timestamp+Send> Progcaster<T> {
                 seq_no: counter,
                 channel,
                 addr: addr.clone(),
-                // TODO: fill with additional data
-                messages: Vec::new(),
-                internal: Vec::new(),
+                changes: recv_changes.iter().map(
+                    |((loc, time), delta)| ((*loc, format!("{:?}", time)), *delta)).collect(),
             }));
 
             // We clone rather than drain to avoid deserialization.

@@ -96,10 +96,8 @@ pub struct ProgressEvent {
     pub seq_no: usize,
     /// Sequence of nested scope identifiers indicating the path from the root to this instance.
     pub addr: Vec<usize>,
-    /// List of message updates, containing Target descriptor, timestamp as string, and delta.
-    pub messages: Vec<(usize, usize, String, i64)>,
-    /// List of capability updates, containing Source descriptor, timestamp as string, and delta.
-    pub internal: Vec<(usize, usize, String, i64)>,
+    /// List of message updates, containing location descriptor, timestamp as string, and delta.
+    pub changes: Vec<((crate::progress::Location, String), i64)>,
 }
 
 #[derive(Serialize, Deserialize, Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
