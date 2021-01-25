@@ -7,7 +7,7 @@ pub type Logger<Event> = crate::logging_core::Logger<Event, WorkerIdentifier>;
 /// Logger for timely dataflow system events.
 pub type TimelyLogger = Logger<TimelyEvent>;
 /// Logger for timely dataflow progress events (the "timely/progress" log stream).
-pub type TimelyProgressLogger = Logger<TimelyProgressEvent>;
+pub type TimelyProgressLogger = Logger<progress::TimelyProgressEvent>;
 
 use std::time::Duration;
 use crate::dataflow::operators::capture::{Event, EventPusher};
@@ -70,79 +70,6 @@ pub struct ChannelsEvent {
     pub source: (usize, usize),
     /// Target descriptor, indicating operator index and input port.
     pub target: (usize, usize),
-}
-
-/// Encapsulates Any and Debug for dynamically typed timestamps in logs
-pub trait ProgressEventTimestamp: std::fmt::Debug + std::any::Any {
-    /// Upcasts this `ProgressEventTimestamp` to `Any`.
-    ///
-    /// NOTE: This is required until https://github.com/rust-lang/rfcs/issues/2765 is fixed
-    ///
-    /// # Example
-    /// ```rust
-    /// let ts = vec![(0usize, 0usize, (23u64, 10u64), -4i64), (0usize, 0usize, (23u64, 11u64), 1i64)];
-    /// let ts: &timely::logging::ProgressEventTimestampVec = &ts;
-    /// for (n, p, t, d) in ts.iter() {
-    ///     print!("{:?}, ", (n, p, t.as_any().downcast_ref::<(u64, u64)>(), d));
-    /// }
-    /// println!();
-    /// ```
-    fn as_any(&self) -> &dyn std::any::Any;
-
-    /// Returns the name of the concrete type of this object.
-    ///
-    /// # Note
-    ///
-    /// This is intended for diagnostic use. The exact contents and format of the
-    /// string returned are not specified, other than being a best-effort
-    /// description of the type. For example, amongst the strings
-    /// that `type_name::<Option<String>>()` might return are `"Option<String>"` and
-    /// `"std::option::Option<std::string::String>"`.
-    fn type_name(&self) -> &'static str;
-}
-impl<T: crate::Data + std::fmt::Debug + std::any::Any> ProgressEventTimestamp for T {
-    fn as_any(&self) -> &dyn std::any::Any { self }
-
-    fn type_name(&self) -> &'static str { std::any::type_name::<T>() }
-}
-
-/// A vector of progress updates in logs
-///
-/// This exists to support upcasting of the concrecte progress update vectors to
-/// `dyn ProgressEventTimestamp`. Doing so at the vector granularity allows us to
-/// use a single allocation for the entire vector (as opposed to a `Box` allocation
-/// for each dynamically typed element).
-pub trait ProgressEventTimestampVec: std::fmt::Debug + std::any::Any {
-    /// Iterate over the contents of the vector
-    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item=(&'a usize, &'a usize, &'a dyn ProgressEventTimestamp, &'a i64)>+'a>;
-}
-
-impl<T: ProgressEventTimestamp> ProgressEventTimestampVec for Vec<(usize, usize, T, i64)> {
-    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item=(&'a usize, &'a usize, &'a dyn ProgressEventTimestamp, &'a i64)>+'a> {
-        Box::new(<[(usize, usize, T, i64)]>::iter(&self[..]).map(|(n, p, t, d)| {
-            let t: &dyn ProgressEventTimestamp = t;
-            (n, p, t, d)
-        }))
-    }
-}
-
-#[derive(Debug)]
-/// Send or receive of progress information.
-pub struct TimelyProgressEvent {
-    /// `true` if the event is a send, and `false` if it is a receive.
-    pub is_send: bool,
-    /// Source worker index.
-    pub source: usize,
-    /// Communication channel identifier
-    pub channel: usize,
-    /// Message sequence number.
-    pub seq_no: usize,
-    /// Sequence of nested scope identifiers indicating the path from the root to this instance.
-    pub addr: Vec<usize>,
-    /// List of message updates, containing Target descriptor, timestamp as string, and delta.
-    pub messages: Box<dyn ProgressEventTimestampVec>,
-    /// List of capability updates, containing Source descriptor, timestamp as string, and delta.
-    pub internal: Box<dyn ProgressEventTimestampVec>,
 }
 
 #[derive(Serialize, Deserialize, Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
@@ -351,4 +278,91 @@ impl From<InputEvent> for TimelyEvent {
 
 impl From<ParkEvent> for TimelyEvent {
     fn from(v: ParkEvent) -> TimelyEvent { TimelyEvent::Park(v) }
+}
+
+/// Logging events related to progress tracking.
+pub mod progress {
+    /// Encapsulates Any and Debug for dynamically typed timestamps in logs
+    pub trait ProgressEventTimestamp: std::fmt::Debug + std::any::Any {
+        /// Upcasts this `ProgressEventTimestamp` to `Any`.
+        ///
+        /// NOTE: This is required until https://github.com/rust-lang/rfcs/issues/2765 is fixed
+        ///
+        /// # Example
+        /// ```rust
+        /// let ts = vec![(0usize, 0usize, (23u64, 10u64), -4i64), (0usize, 0usize, (23u64, 11u64), 1i64)];
+        /// let ts: &timely::logging::ProgressEventTimestampVec = &ts;
+        /// for (n, p, t, d) in ts.iter() {
+        ///     print!("{:?}, ", (n, p, t.as_any().downcast_ref::<(u64, u64)>(), d));
+        /// }
+        /// println!();
+        /// ```
+        fn as_any(&self) -> &dyn std::any::Any;
+
+        /// Returns the name of the concrete type of this object.
+        ///
+        /// # Note
+        ///
+        /// This is intended for diagnostic use. The exact contents and format of the
+        /// string returned are not specified, other than being a best-effort
+        /// description of the type. For example, amongst the strings
+        /// that `type_name::<Option<String>>()` might return are `"Option<String>"` and
+        /// `"std::option::Option<std::string::String>"`.
+        fn type_name(&self) -> &'static str;
+    }
+    impl<T: crate::Data + std::fmt::Debug + std::any::Any> ProgressEventTimestamp for T {
+        fn as_any(&self) -> &dyn std::any::Any { self }
+
+        fn type_name(&self) -> &'static str { std::any::type_name::<T>() }
+    }
+
+    /// A vector of progress updates in logs
+    ///
+    /// This exists to support upcasting of the concrecte progress update vectors to
+    /// `dyn ProgressEventTimestamp`. Doing so at the vector granularity allows us to
+    /// use a single allocation for the entire vector (as opposed to a `Box` allocation
+    /// for each dynamically typed element).
+    pub trait ProgressEventTimestampVec: std::fmt::Debug + std::any::Any {
+        /// Iterate over the contents of the vector
+        fn iter<'a>(&'a self) -> Box<dyn Iterator<Item=(&'a usize, &'a usize, &'a dyn ProgressEventTimestamp, &'a i64)>+'a>;
+    }
+
+    impl<T: ProgressEventTimestamp> ProgressEventTimestampVec for Vec<(usize, usize, T, i64)> {
+        fn iter<'a>(&'a self) -> Box<dyn Iterator<Item=(&'a usize, &'a usize, &'a dyn ProgressEventTimestamp, &'a i64)>+'a> {
+            Box::new(<[(usize, usize, T, i64)]>::iter(&self[..]).map(|(n, p, t, d)| {
+                let t: &dyn ProgressEventTimestamp = t;
+                (n, p, t, d)
+            }))
+        }
+    }
+
+    #[derive(Debug)]
+    /// Send or receive of progress information.
+    pub struct SendProgressEvent {
+        /// `true` if the event is a send, and `false` if it is a receive.
+        pub is_send: bool,
+        /// Source worker index.
+        pub source: usize,
+        /// Communication channel identifier
+        pub channel: usize,
+        /// Message sequence number.
+        pub seq_no: usize,
+        /// Sequence of nested scope identifiers indicating the path from the root to this instance.
+        pub addr: Vec<usize>,
+        /// List of message updates, containing Target descriptor, timestamp as string, and delta.
+        pub messages: Box<dyn ProgressEventTimestampVec>,
+        /// List of capability updates, containing Source descriptor, timestamp as string, and delta.
+        pub internal: Box<dyn ProgressEventTimestampVec>,
+    }
+
+    /// Logging events related to progress tracking.
+    #[derive(Debug)]
+    pub enum TimelyProgressEvent {
+        /// Send or receive of progress information.
+        SendProgress(SendProgressEvent),
+    }
+
+    impl From<SendProgressEvent> for TimelyProgressEvent {
+        fn from(v: SendProgressEvent) -> Self { TimelyProgressEvent::SendProgress(v) }
+    }
 }

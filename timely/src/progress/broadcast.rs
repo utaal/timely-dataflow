@@ -78,7 +78,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
                     }
                 }
 
-                l.log(crate::logging::TimelyProgressEvent {
+                l.log(crate::logging::progress::SendProgressEvent {
                     is_send: true,
                     source: self.source,
                     channel: self.channel_identifier,
@@ -148,7 +148,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
                     }
                 }
 
-                l.log(crate::logging::TimelyProgressEvent {
+                l.log(crate::logging::progress::SendProgressEvent {
                     is_send: false,
                     source: source,
                     seq_no: counter,

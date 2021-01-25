@@ -5,7 +5,7 @@ use timely::dataflow::operators::{Input, Exchange, Probe};
 
 // use timely::dataflow::operators::capture::EventWriter;
 // use timely::dataflow::ScopeParent;
-use timely::logging::{TimelyEvent, TimelyProgressEvent};
+use timely::logging::{TimelyEvent, progress};
 
 fn main() {
     // initializes and runs a timely dataflow.
@@ -24,20 +24,24 @@ fn main() {
         // Register timely progress logging.
         // Less generally useful: intended for debugging advanced custom operators or timely
         // internals.
-        worker.log_register().insert::<TimelyProgressEvent,_>("timely/progress", |_time, data|
-            data.iter().for_each(|x| {
-                println!("PROGRESS: {:?}", x);
-                let (_, _, ev) = x;
-                print!("PROGRESS: TYPED MESSAGES: ");
-                for (n, p, t, d) in ev.messages.iter() {
-                    print!("{:?}, ", (n, p, t.as_any().downcast_ref::<usize>(), d));
+        worker.log_register().insert::<progress::TimelyProgressEvent,_>("timely/progress", |_time, data|
+            data.iter().for_each(|tp| {
+                println!("PROGRESS: {:?}", tp);
+                let (_, _, ev) = tp;
+                match ev {
+                    progress::TimelyProgressEvent::SendProgress(ev) => {
+                        print!("PROGRESS SEND: TYPED MESSAGES: ");
+                        for (n, p, t, d) in ev.messages.iter() {
+                            print!("{:?}, ", (n, p, t.as_any().downcast_ref::<usize>(), d));
+                        }
+                        println!();
+                        print!("PROGRESS SEND: TYPED INTERNAL: ");
+                        for (n, p, t, d) in ev.internal.iter() {
+                            print!("{:?}, ", (n, p, t.as_any().downcast_ref::<usize>(), d));
+                        }
+                        println!();
+                    }
                 }
-                println!();
-                print!("PROGRESS: TYPED INTERNAL: ");
-                for (n, p, t, d) in ev.internal.iter() {
-                    print!("{:?}, ", (n, p, t.as_any().downcast_ref::<usize>(), d));
-                }
-                println!();
             })
         );
 
