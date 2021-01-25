@@ -41,6 +41,23 @@ fn main() {
                         }
                         println!();
                     }
+                    progress::TimelyProgressEvent::OperatesSummary(ev) => {
+                        print!("PROGRESS OPERATES: TYPED SUMMARY: ");
+                        print!("[");
+                        for outer in ev.internal_summaries.iter() {
+                            print!("[");
+                            for inner in outer.iter() {
+                                print!("Antichain [");
+                                for t in inner.iter() {
+                                    print!("{:?}, ", t.as_any().downcast_ref::<usize>());
+                                }
+                                print!("]");
+                            }
+                            print!("]");
+                        }
+                        print!("]");
+                        println!();
+                    }
                 }
             })
         );

@@ -131,16 +131,30 @@ where
 
     /// Adds a new child to the subgraph.
     pub fn add_child(&mut self, child: Box<dyn Operate<TInner>>, index: usize, identifier: usize) {
+        let child_name = child.name().to_owned();
+        let per_op_state = PerOperatorState::new(child, index, self.path.clone(), identifier, self.logging.clone());
         {
             let mut child_path = self.path.clone();
             child_path.push(index);
+            self.progress_logging.as_mut().map(|l| l.log(crate::logging::progress::OperatesSummaryEvent {
+                operates_event: crate::logging::OperatesEvent {
+                    id: identifier,
+                    addr: child_path.clone(),
+                    name: child_name.clone(),
+                },
+                internal_summaries: per_op_state.internal_summary.iter()
+                     .map(|x| x.iter().map(|x| x.elements().iter().map(|x| {
+                         let b: Box<dyn crate::logging::progress::ProgressEventTimestamp> = Box::new(x.clone());
+                         b
+                     }).collect()).collect()).collect(),
+            }));
             self.logging.as_mut().map(|l| l.log(crate::logging::OperatesEvent {
                 id: identifier,
                 addr: child_path,
-                name: child.name().to_owned(),
+                name: child_name,
             }));
         }
-        self.children.push(PerOperatorState::new(child, index, self.path.clone(), identifier, self.logging.clone()))
+        self.children.push(per_op_state)
     }
 
     /// Now that initialization is complete, actually build a subgraph.

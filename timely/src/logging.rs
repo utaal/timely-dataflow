@@ -310,7 +310,7 @@ pub mod progress {
         /// `"std::option::Option<std::string::String>"`.
         fn type_name(&self) -> &'static str;
     }
-    impl<T: crate::Data + std::fmt::Debug + std::any::Any> ProgressEventTimestamp for T {
+    impl<T: std::fmt::Debug + std::any::Any> ProgressEventTimestamp for T {
         fn as_any(&self) -> &dyn std::any::Any { self }
 
         fn type_name(&self) -> &'static str { std::any::type_name::<T>() }
@@ -355,14 +355,29 @@ pub mod progress {
         pub internal: Box<dyn ProgressEventTimestampVec>,
     }
 
+    /// Operator creation with internal summary information.
+    #[derive(Debug)]
+    pub struct OperatesSummaryEvent {
+        /// The related operates event.
+        pub operates_event: super::OperatesEvent,
+        /// Internal summary for every combination of input and output port.
+        pub internal_summaries: Vec<Vec<Vec<Box<dyn ProgressEventTimestamp>>>>,
+    }
+
     /// Logging events related to progress tracking.
     #[derive(Debug)]
     pub enum TimelyProgressEvent {
         /// Send or receive of progress information.
         SendProgress(SendProgressEvent),
+        /// Operator creation with internal summary information.
+        OperatesSummary(OperatesSummaryEvent),
     }
 
     impl From<SendProgressEvent> for TimelyProgressEvent {
         fn from(v: SendProgressEvent) -> Self { TimelyProgressEvent::SendProgress(v) }
+    }
+
+    impl From<OperatesSummaryEvent> for TimelyProgressEvent {
+        fn from(v: OperatesSummaryEvent) -> Self { TimelyProgressEvent::OperatesSummary(v) }
     }
 }

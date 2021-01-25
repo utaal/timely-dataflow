@@ -17,7 +17,7 @@ pub trait Timestamp: Clone+Eq+PartialOrder+Debug+Send+Any+Data+Hash+Ord {
 }
 
 /// A summary of how a timestamp advances along a timely dataflow path.
-pub trait PathSummary<T> : Clone+'static+Eq+PartialOrder+Debug+Default {
+pub trait PathSummary<T> : Clone+'static+Eq+PartialOrder+Debug+Any+Default {
     /// Advances a timestamp according to the timestamp actions on the path.
     ///
     /// The path may advance the timestamp sufficiently that it is no longer valid, for example if
